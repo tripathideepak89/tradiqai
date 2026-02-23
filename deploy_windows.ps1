@@ -1,8 +1,8 @@
-# AutoTrade AI - Windows Production Deployment (Current System)
+# TradiqAI - Windows Production Deployment (Current System)
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host " AutoTrade AI - Windows Deployment" -ForegroundColor Cyan
+Write-Host " TradiqAI - Windows Deployment" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -152,7 +152,7 @@ Write-Host ""
 # Create status check script
 $StatusScript = @'
 Write-Host ""
-Write-Host "=== AutoTrade AI System Status ===" -ForegroundColor Cyan
+Write-Host "=== TradiqAI System Status ===" -ForegroundColor Cyan
 Write-Host ""
 
 $procs = Get-Process python -ErrorAction SilentlyContinue | Where-Object {

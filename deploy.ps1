@@ -1,9 +1,9 @@
-# AutoTrade AI - Windows Production Deployment Script
+# TradiqAI - Windows Production Deployment Script
 
 $ErrorActionPreference = "Stop"
 
 Write-Host "======================================" -ForegroundColor Cyan
-Write-Host "AutoTrade AI - Production Deployment" -ForegroundColor Cyan
+Write-Host "TradiqAI - Production Deployment" -ForegroundColor Cyan
 Write-Host "======================================" -ForegroundColor Cyan
 Write-Host ""
 

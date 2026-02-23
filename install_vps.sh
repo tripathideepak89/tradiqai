@@ -4,7 +4,7 @@
 set -e
 
 echo "======================================"
-echo "AutoTrade AI - VPS Installation"
+echo "TradiqAI - VPS Installation"
 echo "======================================"
 echo ""
 
@@ -148,7 +148,7 @@ fi
 cat > /usr/local/bin/autotrade-status << 'EOF'
 #!/bin/bash
 echo "======================================"
-echo "AutoTrade AI System Status"
+echo "TradiqAI System Status"
 echo "======================================"
 echo ""
 

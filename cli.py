@@ -12,7 +12,7 @@ from monitoring import MonitoringService
 
 @click.group()
 def cli():
-    """AutoTrade AI - Command Line Interface"""
+    """TradiqAI - Command Line Interface"""
     pass
 
 

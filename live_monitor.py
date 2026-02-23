@@ -32,7 +32,7 @@ def clear_screen():
 def print_header():
     """Print dashboard header"""
     print(f"\n{Colors.CYAN}{Colors.BOLD}{'='*80}")
-    print(f"  AUTOTRADE AI - LIVE MONITORING DASHBOARD")
+    print(f"  TRADIQAI - LIVE MONITORING DASHBOARD")
     print(f"  {format_ist(now_ist())}")
     print(f"{'='*80}{Colors.END}\n")
 

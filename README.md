@@ -1,4 +1,4 @@
-# AutoTrade AI 🤖
+# TradiqAI 🤖
 
 **Automated Equity Trading System for Indian Markets**
 
@@ -56,7 +56,7 @@ Key Components:
 ### 1. Clone and Setup
 
 ```bash
-cd autotrade-ai
+cd TradiqAI
 python -m venv venv
 venv\Scripts\activate  # Windows
 # source venv/bin/activate  # Linux/Mac
@@ -139,7 +139,7 @@ docker-compose down
 ## 📁 Project Structure
 
 ```
-autotrade-ai/
+TradiqAI/
 ├── brokers/              # Broker adapters (Zerodha, Groww)
 │   ├── base.py          # Abstract broker interface
 │   ├── zerodha.py       # Zerodha implementation

@@ -1,5 +1,5 @@
 """
-Real-time Web Dashboard for AutoTrade AI
+Real-time Web Dashboard for TradiqAI
 Provides live visualization of trading activity, positions, and metrics
 """
 
@@ -36,7 +36,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI
-app = FastAPI(title="AutoTrade AI Dashboard")
+app = FastAPI(title="TradiqAI Dashboard")
 
 # Database setup
 engine = create_engine(config.database_url)
@@ -105,7 +105,7 @@ HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>AutoTrade AI - Live Dashboard</title>
+    <title>TradiqAI - Live Dashboard</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
@@ -619,7 +619,7 @@ HTML_TEMPLATE = """
 <body>
     <div class="container">
         <div class="header">
-            <h1>🚀 AutoTrade AI - Live Dashboard</h1>
+            <h1>🚀 TradiqAI - Live Dashboard</h1>
             <div class="status">
                 <span class="status-badge" id="marketStatus">Market Closed</span>
                 <span class="refresh-indicator"></span>
@@ -1607,7 +1607,7 @@ async def get_dashboard_data() -> Dict:
 
 def run_dashboard(host: str = "0.0.0.0", port: int = 8080):
     """Run the dashboard server"""
-    print(f"🚀 Starting AutoTrade AI Dashboard on http://{host}:{port}")
+    print(f"🚀 Starting TradiqAI Dashboard on http://{host}:{port}")
     print(f"📊 Open http://localhost:{port} in your browser")
     uvicorn.run(app, host=host, port=port)
 

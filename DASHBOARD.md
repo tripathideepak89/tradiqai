@@ -1,4 +1,4 @@
-# 🎨 AutoTrade AI - Web Dashboard
+# 🎨 TradiqAI - Web Dashboard
 
 Real-time web-based dashboard for monitoring your trading system with live updates, beautiful visualizations, and comprehensive metrics.
 
@@ -77,7 +77,7 @@ python dashboard.py --host 0.0.0.0 --port 9000
 ## 📸 Dashboard Sections
 
 ### Header
-- **System Title**: AutoTrade AI branding
+- **System Title**: TradiqAI branding
 - **Market Status Badge**: Live/Closed indicator with pulsing animation
 - **Last Update Timestamp**: Shows when data was last refreshed
 

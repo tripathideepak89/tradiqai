@@ -60,7 +60,7 @@ def main():
     
     # Print results
     print(f"\n{'='*50}")
-    print("AutoTrade AI - Health Check")
+    print("TradiqAI - Health Check")
     print(f"{'='*50}\n")
     
     for check_name, (status, message) in checks.items():

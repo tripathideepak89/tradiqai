@@ -1,10 +1,10 @@
 #!/bin/bash
-# AutoTrade AI - Production Deployment Script
+# TradiqAI - Production Deployment Script
 
 set -e  # Exit on error
 
 echo "======================================"
-echo "AutoTrade AI - Production Deployment"
+echo "TradiqAI - Production Deployment"
 echo "======================================"
 echo ""
 

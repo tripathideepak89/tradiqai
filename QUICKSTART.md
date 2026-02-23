@@ -1,4 +1,4 @@
-# AutoTrade AI - Quick Start Guide
+# TradiqAI - Quick Start Guide
 
 ## Prerequisites Checklist
 
@@ -98,7 +98,7 @@ python main.py
 
 You should see:
 ```
-INFO - Initializing AutoTrade AI System...
+INFO - Initializing TradiqAI System...
 INFO - ✓ Database initialized
 INFO - ✓ Broker connected
 INFO - ✓ Risk engine initialized

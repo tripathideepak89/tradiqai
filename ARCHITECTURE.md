@@ -1,6 +1,6 @@
 # System Architecture
 
-**AutoTrade AI - Algorithmic Trading System for Indian Markets**
+**TradiqAI - Algorithmic Trading System for Indian Markets**
 
 ## 🏗️ High-Level Architecture
 

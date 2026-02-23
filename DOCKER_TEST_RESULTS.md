@@ -182,7 +182,7 @@ Get-Content logs\*.log -Tail 50
 
 **Deployment Result: ✅ SUCCESS**
 
-The AutoTrade AI system has been successfully deployed using Docker containers for PostgreSQL and Redis, with the trading application running locally. All core components are functional:
+The TradiqAI system has been successfully deployed using Docker containers for PostgreSQL and Redis, with the trading application running locally. All core components are functional:
 
 - ✅ Database connectivity (PostgreSQL via Docker)
 - ✅ Cache connectivity (Redis via Docker)

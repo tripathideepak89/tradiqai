@@ -1,4 +1,4 @@
-"""Database models for AutoTrade AI"""
+"""Database models for TradiqAI"""
 from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Enum, Text
 from sqlalchemy.sql import func
 from datetime import datetime

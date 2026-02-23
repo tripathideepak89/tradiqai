@@ -193,7 +193,7 @@ spec:
     spec:
       containers:
       - name: autotrade
-        image: your-registry/autotrade-ai:latest
+        image: your-registry/tradiq-ai:latest
         envFrom:
         - configMapRef:
             name: autotrade-config

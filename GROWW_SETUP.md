@@ -2,7 +2,7 @@
 
 ## Overview
 
-The AutoTrade AI system now supports **Groww** as a broker option alongside Zerodha. This guide will help you set up and use Groww for automated trading.
+The TradiqAI system now supports **Groww** as a broker option alongside Zerodha. This guide will help you set up and use Groww for automated trading.
 
 ## Prerequisites
 
@@ -152,7 +152,7 @@ python main.py
 
 Expected output:
 ```
-INFO - Initializing AutoTrade AI System...
+INFO - Initializing TradiqAI System...
 INFO - Using broker: groww
 INFO - Connecting to Groww API...
 INFO - Connected to Groww: [Your Name]

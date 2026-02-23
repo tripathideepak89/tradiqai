@@ -2,7 +2,7 @@
 
 ## 🎯 What's Running
 
-Your AutoTrade AI system is **fully operational** with:
+Your TradiqAI system is **fully operational** with:
 
 ✅ **Live-Quote Based Trading** (no historical data dependencies)  
 ✅ **Real-time Market Scanning** (every 60 seconds)  

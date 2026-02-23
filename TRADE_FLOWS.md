@@ -1,6 +1,6 @@
 # Trade Lifecycle & State Management
 
-**AutoTrade AI - Complete Trade Flow Documentation**
+**TradiqAI - Complete Trade Flow Documentation**
 
 ## 📋 Trade State Machine
 

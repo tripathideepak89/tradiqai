@@ -1,4 +1,4 @@
-# AutoTrade AI - Deployment Guide
+# TradiqAI - Deployment Guide
 
 ## Table of Contents
 1. [Local Development Deployment](#local-development)

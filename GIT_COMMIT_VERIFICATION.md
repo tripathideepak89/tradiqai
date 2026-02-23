@@ -3,7 +3,7 @@ Generated: February 23, 2026
 
 ## ✅ Successfully Committed to GitHub
 
-**Repository:** https://github.com/tripathideepak89/autotrade-ai
+**Repository:** https://github.com/tripathideepak89/TradiqAI
 **Branch:** main
 **Commit:** 53e616d
 
@@ -174,12 +174,12 @@ All sensitive credentials excluded via .gitignore
 
 ## 🔗 Repository Access
 
-**GitHub URL:** https://github.com/tripathideepak89/autotrade-ai
+**GitHub URL:** https://github.com/tripathideepak89/TradiqAI
 
 To clone on another machine:
 ```bash
-git clone https://github.com/tripathideepak89/autotrade-ai.git
-cd autotrade-ai
+git clone https://github.com/tripathideepak89/TradiqAI.git
+cd TradiqAI
 cp .env.example .env
 # Edit .env with your actual credentials
 ```

@@ -1,6 +1,6 @@
 # Documentation Index
 
-**AutoTrade AI - Complete Documentation Guide**
+**TradiqAI - Complete Documentation Guide**
 
 ---
 

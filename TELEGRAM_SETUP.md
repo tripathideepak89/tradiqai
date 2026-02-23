@@ -48,7 +48,7 @@ async def test_telegram():
     try:
         await bot.send_message(
             chat_id=chat_id,
-            text="🤖 Test message from AutoTrade AI!\n\nIf you see this, your Telegram setup is working! ✅"
+            text="🤖 Test message from TradiqAI!\n\nIf you see this, your Telegram setup is working! ✅"
         )
         print("✅ Message sent successfully!")
     except Exception as e:
@@ -83,7 +83,7 @@ python main.py
 
 Expected message in Telegram:
 ```
-🚀 AutoTrade AI System Started
+🚀 TradiqAI System Started
 
 Capital: ₹50,000
 Mode: PAPER
