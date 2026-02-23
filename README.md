@@ -31,6 +31,18 @@ Market Data → Strategy Engine → Risk Engine → Order Manager → Broker
                               Monitoring Service
 ```
 
+**📖 Detailed Architecture Documentation:**
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Complete system architecture with 15+ diagrams
+- **[TRADE_FLOWS.md](TRADE_FLOWS.md)** - Trade lifecycle and state management flows
+
+Key Components:
+- **Transaction Cost Calculator**: Validates every trade against transaction costs
+- **Multi-layer Risk Engine**: Daily loss limits, position limits, exposure checks
+- **Performance Tracker**: 0-100 scoring system with automatic rebalancing
+- **Capital Allocator**: Dynamic allocation across 4 time layers
+- **News Intelligence**: NSE announcements with impact detection
+- **Pre-Entry Checklist**: 7-point quality filter for trade validation
+
 ## 📋 Prerequisites
 
 - Python 3.11+
@@ -270,6 +282,14 @@ For issues and questions:
 
 ## 🎓 Resources
 
+**System Documentation:**
+- [Architecture Overview](ARCHITECTURE.md) - System architecture with diagrams
+- [Trade Flow Documentation](TRADE_FLOWS.md) - Trade lifecycle and state machines
+- [Cost-Aware System](COST_AWARE_SYSTEM.md) - Transaction cost analysis
+- [Groww Setup Guide](GROWW_SETUP.md) - Broker integration guide
+- [Deployment Guide](DEPLOYMENT.md) - Production deployment instructions
+
+**External Resources:**
 - [Zerodha Kite Connect Docs](https://kite.trade/docs/connect/v3/)
 - [TA-Lib Documentation](https://mrjbq7.github.io/ta-lib/)
 - [Algorithmic Trading Guide](https://www.investopedia.com/articles/active-trading/101014/basics-algorithmic-trading-concepts-and-examples.asp)
