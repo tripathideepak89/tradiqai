@@ -1,9 +1,49 @@
 """Database models for TradiqAI"""
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Enum, Text
+from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Enum, Text, ForeignKey
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime
 import enum
 from database import Base
+
+
+class User(Base):
+    """User model - stores user accounts and settings"""
+    __tablename__ = "users"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), unique=True, nullable=False, index=True)
+    email = Column(String(100), unique=True, nullable=False, index=True)
+    hashed_password = Column(String(255), nullable=False)
+    full_name = Column(String(100), nullable=True)
+    
+    # Account Status
+    is_active = Column(Boolean, default=True)
+    is_admin = Column(Boolean, default=False)
+    
+    # Trading Configuration
+    capital = Column(Float, default=50000.0)
+    paper_trading = Column(Boolean, default=True)
+    broker_name = Column(String(50), default="groww")  # groww, zerodha
+    broker_config = Column(Text, nullable=True)  # JSON string with broker credentials (encrypted)
+    
+    # Risk Settings (override defaults)
+    max_daily_loss = Column(Float, default=1500.0)
+    max_position_risk = Column(Float, default=400.0)
+    max_open_positions = Column(Integer, default=2)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    last_login = Column(DateTime(timezone=True), nullable=True)
+    
+    # Relationships
+    trades = relationship("Trade", back_populates="user", cascade="all, delete-orphan")
+    daily_metrics = relationship("DailyMetrics", back_populates="user", cascade="all, delete-orphan")
+    system_logs = relationship("SystemLog", back_populates="user", cascade="all, delete-orphan")
+    
+    def __repr__(self):
+        return f"<User {self.username}>"
 
 
 class TradeStatus(str, enum.Enum):
@@ -26,6 +66,7 @@ class Trade(Base):
     __tablename__ = "trades"
     
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     symbol = Column(String(50), nullable=False, index=True)
     strategy_name = Column(String(100), nullable=False)
     direction = Column(Enum(TradeDirection), nullable=False)
@@ -66,6 +107,9 @@ class Trade(Base):
     # Metadata
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    user = relationship("User", back_populates="trades")
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 
@@ -74,6 +118,7 @@ class DailyMetrics(Base):
     __tablename__ = "daily_metrics"
     
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     date = Column(DateTime(timezone=True), unique=True, nullable=False, index=True)
     
     # P&L Metrics
@@ -115,12 +160,16 @@ class DailyMetrics(Base):
     average_loss = Column(Float, default=0.0)
     expected_value = Column(Float, default=0.0)
     
+    # Relationships
+    user = relationship("User", back_populates="daily_metrics")
+    
     # Metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 
 class SystemLog(Base):
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Nullable for system-wide logs
     """System logs for debugging and auditing"""
     __tablename__ = "system_logs"
     
@@ -139,6 +188,9 @@ class SystemLog(Base):
     order_id = Column(String(100), nullable=True)
     
     # Additional Data
+    
+    # Relationships
+    user = relationship("User", back_populates="system_logs")
     log_metadata = Column(Text, nullable=True)  # JSON string for additional context
     
     # Error Tracking

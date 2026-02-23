@@ -8,22 +8,29 @@ import json
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Response
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Response, Depends, HTTPException, status
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.security import HTTPBearer
 import uvicorn
 from sqlalchemy import create_engine, select, desc, text
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
 import os
 from dotenv import load_dotenv
 from collections import defaultdict
 import time
 
 # Import models
-from models import Trade, NewsItem
+from models import Trade, NewsItem, User, DailyMetrics
 from brokers.groww import GrowwBroker
 from config import settings as config
 from utils.timezone import now_ist, format_ist, today_ist, IST
+
+# Import Supabase authentication
+from tradiqai_supabase_auth import (
+    auth_manager, get_current_user, get_current_active_user,
+    UserLogin, UserRegister, UserResponse, Token
+)
 
 # Import news system
 from news_ingestion_layer import get_news_ingestion_layer
@@ -99,6 +106,65 @@ async def init_news_system():
     # if news_polling_task is None:
     #     news_polling_task = asyncio.create_task(news_ingestion.start_polling())
     #     print("📡 News polling started for dashboard")
+
+
+# ============================================================================
+# Authentication Routes
+# ============================================================================
+
+@app.post("/api/auth/register")
+async def register(user_create: UserRegister):
+    """Register a new user with Supabase Auth"""
+    try:
+        result = await auth_manager.register_user(user_create)
+        return result
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Registration error: {e}")
+        raise HTTPException(status_code=500, detail="Registration failed")
+
+
+@app.post("/api/auth/login", response_model=Token)
+async def login(user_login: UserLogin):
+    """Login with Supabase Auth and get access token"""
+    try:
+        token_data = await auth_manager.login_user(user_login)
+        return token_data
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Login error: {e}")
+        raise HTTPException(status_code=500, detail="Login failed")
+
+
+@app.get("/api/auth/me")
+async def get_current_user_info(current_user: Dict = Depends(get_current_user)):
+    """Get current user information from Supabase"""
+    return current_user
+
+
+@app.put("/api/auth/me/capital")
+async def update_capital(
+    capital: float,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Update user's trading capital"""
+    user_id = current_user["id"]
+    await auth_manager.update_user_settings(user_id, {"capital": capital})
+    return {"message": "Capital updated", "capital": capital}
+
+
+@app.put("/api/auth/me/paper-trading")
+async def toggle_paper_trading(
+    paper_trading: bool,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Toggle paper trading mode"""
+    user_id = current_user["id"]
+    await auth_manager.update_user_settings(user_id, {"paper_trading": paper_trading})
+    return {"message": "Paper trading mode updated", "paper_trading": paper_trading}
+
 
 # Dashboard HTML
 HTML_TEMPLATE = """
@@ -619,7 +685,13 @@ HTML_TEMPLATE = """
 <body>
     <div class="container">
         <div class="header">
-            <h1>🚀 TradiqAI - Live Dashboard</h1>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h1>🚀 TradiqAI - Live Dashboard</h1>
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <span id="userInfo" style="color: #667eea; font-weight: bold;"></span>
+                    <button onclick="logout()" style="padding: 8px 16px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">🔓 Logout</button>
+                </div>
+            </div>
             <div class="status">
                 <span class="status-badge" id="marketStatus">Market Closed</span>
                 <span class="refresh-indicator"></span>
@@ -767,6 +839,55 @@ HTML_TEMPLATE = """
         let ws = null;
         let currentTradeAction = null;
         
+        // Check authentication on page load
+        function checkAuth() {
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                console.log('[Auth] No token found, redirecting to login');
+                window.location.href = '/login';
+                return false;
+            }
+            return true;
+        }
+        
+        // Get current user info
+        async function getUserInfo() {
+            const token = localStorage.getItem('access_token');
+            if (!token) return;
+            
+            try {
+                const response = await fetch('/api/auth/me', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const user = await response.json();
+                    document.getElementById('userInfo').textContent = `👤 ${user.username} | Capital: ₹${user.capital.toLocaleString()}`;
+                } else if (response.status === 401) {
+                    // Token expired or invalid
+                    console.log('[Auth] Token expired, redirecting to login');
+                    localStorage.removeItem('access_token');
+                    localStorage.removeItem('refresh_token');
+                    window.location.href = '/login';
+                }
+            } catch (error) {
+                console.error('[Auth] Error fetching user info:', error);
+            }
+        }
+        
+        // Logout function
+        function logout() {
+            console.log('[Auth] Logging out');
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            if (ws) {
+                ws.close();
+            }
+            window.location.href = '/login';
+        }
+        
         async function placeTrade(side) {
             const form = document.getElementById('tradeForm');
             const buyBtn = document.getElementById('modalBuyBtn');
@@ -800,11 +921,13 @@ HTML_TEMPLATE = """
             sellBtn.disabled = true;
             
             try {
-                // Send order to backend
+                // Send order to backend with auth token
+                const token = localStorage.getItem('access_token');
                 const response = await fetch('/api/place_order', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
                     },
                     body: JSON.stringify({
                         symbol: symbol,
@@ -885,8 +1008,16 @@ HTML_TEMPLATE = """
         }
         
         function connect() {
-            console.log('[WebSocket] Attempting to connect to ws://' + window.location.host + '/ws');
-            ws = new WebSocket(`ws://${window.location.host}/ws`);
+            // Get auth token
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                console.error('[WebSocket] No auth token found');
+                window.location.href = '/login';
+                return;
+            }
+            
+            console.log('[WebSocket] Attempting to connect to ws://' + window.location.host + '/ws with authentication');
+            ws = new WebSocket(`ws://${window.location.host}/ws?token=${token}`);
             
             ws.onopen = () => {
                 console.log('[WebSocket] ✅ Connected successfully!');
@@ -1151,17 +1282,34 @@ HTML_TEMPLATE = """
             container.innerHTML = html;
         }
         
-        // Connect when DOM is ready
+        // Initialize on page load
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', connect);
+            document.addEventListener('DOMContentLoaded', () => {
+                if (checkAuth()) {
+                    getUserInfo();
+                    connect();
+                }
+            });
         } else {
             // DOM already loaded
-            connect();
+            if (checkAuth()) {
+                getUserInfo();
+                connect();
+            }
         }
     </script>
 </body>
 </html>
 """
+
+@app.get("/login")
+async def get_login_page():
+    """Serve the login page"""
+    try:
+        with open("templates/login.html", "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    except FileNotFoundError:
+        return HTMLResponse(content="<h1>Login page not found</h1>", status_code=500)
 
 @app.get("/")
 async def get_dashboard():
@@ -1179,7 +1327,11 @@ async def health_check():
     return {"status": "ok", "timestamp": now_ist().isoformat()}
 
 @app.post("/api/place_order")
-async def place_order(order_data: dict):
+async def place_order(
+    order_data: dict,
+    current_user: User = Depends(get_current_user)
+):
+    """Place a new order (protected route)"""
     """Place a manual trade order"""
     try:
         # Initialize broker if needed
@@ -1252,6 +1404,54 @@ async def place_order(order_data: dict):
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for real-time updates"""
     print("📡 New WebSocket connection attempt...")
+    
+    # Get token from query parameters
+    token = websocket.query_params.get("token")
+    if not token:
+        print("❌ No token provided in WebSocket connection")
+        await websocket.close(code=1008)  # Policy violation
+        return
+    
+    # Verify token and get user from Supabase
+    try:
+        from tradiqai_supabase_config import get_supabase_client, get_supabase_admin
+        supabase = get_supabase_client()
+        supabase_admin = get_supabase_admin()
+        
+        # Get user from Supabase using JWT token
+        auth_response = supabase.auth.get_user(token)
+        
+        if not auth_response or not auth_response.user:
+            print(f"❌ Invalid token")
+            await websocket.close(code=1008)
+            return
+        
+        user_id = auth_response.user.id
+        
+        # Get user profile using admin client (bypasses RLS)
+        profile = supabase_admin.table("users").select("*").eq("id", user_id).execute()
+        
+        if not profile.data:
+            print(f"❌ User profile not found: user_id={user_id}")
+            await websocket.close(code=1008)
+            return
+        
+        user = profile.data[0]
+        
+        # Check if user is active (default to True if not set)
+        is_active = user.get("is_active", True)
+        if not is_active:
+            print(f"❌ User account is deactivated: user_id={user_id}")
+            await websocket.close(code=1008)
+            return
+        
+        print(f"✅ WebSocket authenticated: user_id={user_id}, username={user.get('username', 'unknown')}")
+        
+    except Exception as e:
+        print(f"❌ Authentication failed: {e}")
+        await websocket.close(code=1008)
+        return
+    
     await manager.connect(websocket)
     print("✅ WebSocket connected")
     
@@ -1266,9 +1466,9 @@ async def websocket_endpoint(websocket: WebSocket):
         print("✅ News system initialized")
         
         while True:
-            print("📊 Fetching dashboard data...")
-            # Gather all data
-            data = await get_dashboard_data()
+            print(f"📊 Fetching dashboard data for user_id={user_id}...")
+            # Gather all data for this user
+            data = await get_dashboard_data(user_id)
             print(f"✅ Data gathered: {len(data.get('monitored_stocks', []))} stocks, {len(data.get('positions', []))} positions")
             
             # Send to client
@@ -1287,14 +1487,22 @@ async def websocket_endpoint(websocket: WebSocket):
         traceback.print_exc()
         manager.disconnect(websocket)
 
-async def get_dashboard_data() -> Dict:
-    """Gather all dashboard data"""
+async def get_dashboard_data(user_id: str) -> Dict:
+    """Gather all dashboard data for a specific user (Supabase version)"""
     start_time = time.time()
     try:
-        print("  [1/6] Creating database session...")
-        # Get session
-        session = SessionLocal()
-        logger.debug(f"⏱️ Session created: {time.time() - start_time:.3f}s")
+        from tradiqai_supabase_config import get_supabase_client, get_supabase_admin
+        supabase = get_supabase_admin()  # Use admin client to bypass RLS
+        
+        print(f"  [1/6] Fetching user data for user_id={user_id}...")
+        # Get user from Supabase
+        user_response = supabase.table("users").select("*").eq("id", user_id).execute()
+        if not user_response.data:
+            logger.error(f"User not found: {user_id}")
+            return {}
+        
+        user_data = user_response.data[0]
+        logger.debug(f"⏱️ User fetched: {time.time() - start_time:.3f}s")
         
         print("  [2/6] Checking market status...")
         # Check if market is open (IST)
@@ -1310,14 +1518,15 @@ async def get_dashboard_data() -> Dict:
         print(f"     Market open: {market_open}")
         
         print("  [3/6] Fetching account margins...")
-        # Get account data from broker
+        # Get account data from user settings
         account_start = time.time()
         account_data = {
-            "capital": 0.0,
+            "capital": user_data["capital"],
             "margin_used": 0.0,
             "exposure": 0.0
         }
         
+        # Optionally fetch live margins from broker if connected
         if broker:
             try:
                 # Add timeout to prevent hanging
@@ -1325,16 +1534,17 @@ async def get_dashboard_data() -> Dict:
                 print(f"     Margins fetched in {time.time() - account_start:.3f}s")
                 logger.debug(f"⏱️ Margins fetched: {time.time() - account_start:.3f}s")
                 if margins:
+                    # Use broker data if available, otherwise use user settings
                     account_data = {
-                        "capital": margins.get("available_cash", 0.0),
+                        "capital": margins.get("available_cash", user_data["capital"]),
                         "margin_used": margins.get("margin_used", 0.0),
-                        "exposure": margins.get("margin_used", 0.0) / max(margins.get("available_cash", 1.0), 1.0) * 100
+                        "exposure": margins.get("margin_used", 0.0) / max(margins.get("available_cash", user_data["capital"]), 1.0) * 100
                     }
             except asyncio.TimeoutError:
-                print(f"     ⚠️ Margins fetch timed out after 5s")
+                print(f"     ⚠️ Margins fetch timed out after 5s, using user settings")
                 logger.warning("Margins fetch timed out")
             except Exception as e:
-                print(f"     ⚠️ Margins fetch error: {e}")
+                print(f"     ⚠️ Margins fetch error: {e}, using user settings")
                 logger.error(f"Error fetching margins: {e}")
         
         # Get active positions from broker
@@ -1487,16 +1697,13 @@ async def get_dashboard_data() -> Dict:
         print(f"     Quotes fetched in {time.time() - quotes_start:.3f}s (cache hits: {cache_hits}, misses: {cache_misses})")
         logger.debug(f"⏱️ Quotes fetched: {time.time() - quotes_start:.3f}s (cache hits: {cache_hits}, misses: {cache_misses})")
         
-        # Get today's trades (IST)
-        print("  [6/6] Fetching today's trades...")
+        # Get today's trades for this user from Supabase (IST)
+        print(f"  [6/6] Fetching today's trades for user_id={user_id}...")
         trades_start = time.time()
-        today_start = today_ist()
-        trades = session.execute(
-            select(Trade)
-            .where(Trade.entry_timestamp >= today_start)
-            .order_by(Trade.entry_timestamp.desc())
-            .limit(10)
-        ).scalars().all()
+        today_start = today_ist().isoformat()
+        
+        trades_response = supabase.table("trades").select("*").eq("user_id", user_id).gte("entry_timestamp", today_start).order("entry_timestamp", desc=True).limit(10).execute()
+        trades = trades_response.data if trades_response.data else []
         logger.debug(f"⏱️ Trades query: {time.time() - trades_start:.3f}s")
         
         trades_data = []
@@ -1504,22 +1711,22 @@ async def get_dashboard_data() -> Dict:
         winning_trades = 0
         
         for trade in trades:
-            pnl = trade.net_pnl or 0.0
+            pnl = trade.get("pnl", 0.0) or 0.0
             total_realized_pnl += pnl
             if pnl > 0:
                 winning_trades += 1
             
-            # Map direction to side for display (long -> BUY, short -> SELL)
-            side = "BUY" if trade.direction == "long" else "SELL"
+            # Map side for display
+            side = trade.get("side", "BUY")
             
             trades_data.append({
-                "timestamp": trade.entry_timestamp.isoformat() if trade.entry_timestamp else None,
-                "symbol": trade.symbol,
+                "timestamp": trade.get("entry_timestamp"),
+                "symbol": trade.get("symbol"),
                 "side": side,
-                "quantity": trade.quantity,
-                "price": trade.entry_price,
+                "quantity": trade.get("quantity"),
+                "price": trade.get("entry_price"),
                 "pnl": pnl,
-                "status": trade.status
+                "status": trade.get("status")
             })
         
         # Calculate performance metrics
@@ -1529,43 +1736,24 @@ async def get_dashboard_data() -> Dict:
         # Sort monitored stocks by day change % (highest first) - shows top movers at top
         monitored_stocks_data.sort(key=lambda x: x.get('day_change_percent', 0), reverse=True)
         
-        # Get recent news from database (shared across processes)
+        # Get recent news from Supabase (shared across users)
         news_start = time.time()
         news_feed_data = []
         try:
-            # Read news from database - this allows both main system and dashboard to see same news
             # Get news from last 24 hours, ordered by most recent first
-            cutoff = now_ist() - timedelta(hours=24)
-            db_news_items = session.query(NewsItem).filter(
-                NewsItem.timestamp >= cutoff
-            ).order_by(NewsItem.timestamp.desc()).limit(20).all()
+            cutoff = (now_ist() - timedelta(hours=24)).isoformat()
+            news_response = supabase.table("system_logs").select("*").eq("level", "INFO").gte("created_at", cutoff).order("created_at", desc=True).limit(20).execute()
+            
             logger.debug(f"⏱️ News query: {time.time() - news_start:.3f}s")
             
-            if db_news_items:
-                logger.info(f"📰 Found {len(db_news_items)} news items from database")
-                
-                for news in db_news_items:
-                    news_feed_data.append({
-                        "symbol": news.symbol,
-                        "headline": news.headline,
-                        "timestamp": news.timestamp.isoformat(),
-                        "category": news.category or "unknown",
-                        "score": news.impact_score or 0,
-                        "action": news.action or "UNKNOWN",
-                        "direction": news.direction or "NEUTRAL",
-                        "blocked_by": news.blocked_by
-                    })
-            else:
-                logger.info("No news in database yet - waiting for NSE announcements")
-                # Don't show demo news - keep it empty so dashboard shows waiting message
-                news_feed_data = []
+            # For now, show empty news - we'll populate this from the trading system later
+            # TODO: Integrate news ingestion system with Supabase
+            news_feed_data = []
                 
         except Exception as e:
-            logger.warning(f"Error reading news from database: {e}")
+            logger.warning(f"Error reading news from Supabase: {e}")
             # Fallback to empty news
             news_feed_data = []
-        
-        session.close()
         
         total_time = time.time() - start_time
         print(f"✅ Dashboard data complete in {total_time:.3f}s - returning {len(monitored_stocks_data)} stocks, {len(positions_data)} positions, {len(trades_data)} trades")

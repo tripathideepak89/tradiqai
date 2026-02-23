@@ -58,6 +58,12 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://postgres:password@localhost:5432/autotrade"
     redis_url: str = "redis://localhost:6379/0"
     
+    # Supabase
+    supabase_url: Optional[str] = None
+    supabase_anon_key: Optional[str] = None
+    supabase_service_key: Optional[str] = None
+    supabase_db_password: Optional[str] = None
+    
     # Monitoring
     telegram_bot_token: Optional[str] = None
     telegram_chat_id: Optional[str] = None
