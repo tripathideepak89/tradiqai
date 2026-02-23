@@ -1,0 +1,41 @@
+[Unit]
+Description=AutoTrade AI Trading System
+After=network.target postgresql.service redis.service
+Wants=postgresql.service redis.service
+
+[Service]
+Type=simple
+User=autotrade
+Group=autotrade
+WorkingDirectory=/opt/autotrade-ai
+Environment="PATH=/opt/autotrade-ai/.venv/bin"
+EnvironmentFile=/opt/autotrade-ai/.env
+
+# Main process
+ExecStart=/opt/autotrade-ai/.venv/bin/python main.py
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitBurst=5
+StartLimitIntervalSec=300
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/autotrade-ai/logs /opt/autotrade-ai/data
+
+# Resource limits
+CPUQuota=100%
+MemoryLimit=1G
+TasksMax=100
+
+# Logging
+StandardOutput=append:/var/log/autotrade/app.log
+StandardError=append:/var/log/autotrade/error.log
+SyslogIdentifier=autotrade-ai
+
+[Install]
+WantedBy=multi-user.target

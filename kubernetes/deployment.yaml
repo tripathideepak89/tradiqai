@@ -1,0 +1,237 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: autotrade
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: autotrade-config
+  namespace: autotrade
+data:
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "INFO"
+  BROKER: "groww"
+  INITIAL_CAPITAL: "50000"
+  MAX_DAILY_LOSS: "1500"
+  MAX_RISK_PER_TRADE: "400"
+  MAX_POSITION_SIZE: "0.3"
+  MAX_OPEN_POSITIONS: "2"
+  TZ: "Asia/Kolkata"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: autotrade-secrets
+  namespace: autotrade
+type: Opaque
+stringData:
+  GROWW_API_KEY: "your_api_key_here"
+  GROWW_API_SECRET: "your_api_secret_here"
+  DATABASE_URL: "postgresql://user:password@postgres:5432/autotrade"
+  REDIS_URL: "redis://redis:6379/0"
+  TELEGRAM_BOT_TOKEN: "your_telegram_token"
+  TELEGRAM_CHAT_ID: "your_chat_id"
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: autotrade-logs-pvc
+  namespace: autotrade
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: autotrade-data-pvc
+  namespace: autotrade
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data-pvc
+  namespace: autotrade
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: autotrade
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        env:
+        - name: POSTGRES_USER
+          value: "postgres"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: autotrade-secrets
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_DB
+          value: "autotrade"
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: postgres-data
+        persistentVolumeClaim:
+          claimName: postgres-data-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: autotrade
+spec:
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: autotrade
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: autotrade
+spec:
+  selector:
+    app: redis
+  ports:
+  - port: 6379
+    targetPort: 6379
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: autotrade-app
+  namespace: autotrade
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: autotrade-app
+  template:
+    metadata:
+      labels:
+        app: autotrade-app
+    spec:
+      containers:
+      - name: autotrade
+        image: your-registry/autotrade-ai:latest
+        envFrom:
+        - configMapRef:
+            name: autotrade-config
+        - secretRef:
+            name: autotrade-secrets
+        volumeMounts:
+        - name: logs
+          mountPath: /app/logs
+        - name: data
+          mountPath: /app/data
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import os; exit(0 if os.path.exists('logs/trading_' + __import__('datetime').datetime.now().strftime('%Y-%m-%d') + '.log') else 1)"
+          initialDelaySeconds: 30
+          periodSeconds: 60
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import os; exit(0 if os.path.exists('logs/trading_' + __import__('datetime').datetime.now().strftime('%Y-%m-%d') + '.log') else 1)"
+          initialDelaySeconds: 10
+          periodSeconds: 30
+      volumes:
+      - name: logs
+        persistentVolumeClaim:
+          claimName: autotrade-logs-pvc
+      - name: data
+        persistentVolumeClaim:
+          claimName: autotrade-data-pvc
+      restartPolicy: Always

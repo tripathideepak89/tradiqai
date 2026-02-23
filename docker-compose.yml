@@ -1,0 +1,68 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: autotrade-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: autotrade
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - autotrade-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: autotrade-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - autotrade-network
+
+  # Trading Application
+  app:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: autotrade-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/autotrade
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    restart: unless-stopped
+    networks:
+      - autotrade-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  autotrade-network:
+    driver: bridge
