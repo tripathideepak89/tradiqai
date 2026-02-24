@@ -23,7 +23,7 @@ fi
 
 # Start the application
 echo "✅ Starting Uvicorn server..."
-exec uvicorn dashboard:app \
+exec python3.11 -m uvicorn dashboard:app \
     --host 0.0.0.0 \
     --port $PORT \
     --workers 2 \

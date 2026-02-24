@@ -2,7 +2,7 @@
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "uvicorn dashboard:app --host 0.0.0.0 --port $PORT"
+startCommand = "python3.11 -m uvicorn dashboard:app --host 0.0.0.0 --port $PORT"
 healthcheckPath = "/health"
 healthcheckTimeout = 100
 restartPolicyType = "ON_FAILURE"
@@ -10,3 +10,4 @@ restartPolicyMaxRetries = 10
 
 [env]
 PYTHON_VERSION = "3.11"
+NIXPACKS_PYTHON_VERSION = "3.11"
