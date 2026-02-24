@@ -150,16 +150,49 @@ async def sync_broker_data():
         logger.info("📊 Syncing broker positions...")
         positions = await broker.get_positions()
         
+        # Track symbols with open positions in broker
+        broker_symbols = set()
+        
         if positions:
             # Update positions in database
             for position in positions:
-                # Check if position already exists in database
-                existing = supabase.table("trades").select("id, broker_order_id").eq(
-                    "symbol", position.symbol
-                ).eq("user_id", user_id).eq("status", "OPEN").execute()
+                broker_symbols.add(position.symbol)
                 
-                if not existing.data:
-                    # Create new trade record for this position
+                # Get current quote for P&L calculation
+                try:
+                    quote = await broker.get_quote(position.symbol)
+                    current_price = quote.ltp if quote else position.average_price
+                except:
+                    current_price = position.average_price
+                
+                # Check if position already exists in database
+                existing = supabase.table("trades").select(
+                    "id, entry_price, quantity, side"
+                ).eq("symbol", position.symbol).eq("user_id", user_id).eq("status", "OPEN").execute()
+                
+                if existing.data:
+                    # UPDATE existing trade with current data
+                    trade = existing.data[0]
+                    entry_price = trade.get("entry_price", position.average_price)
+                    quantity = trade.get("quantity", abs(position.quantity))
+                    side = trade.get("side", "BUY")
+                    
+                    # Calculate unrealized P&L
+                    if side == "BUY":
+                        pnl = (current_price - entry_price) * quantity
+                    else:
+                        pnl = (entry_price - current_price) * quantity
+                    
+                    # Update with latest data (but keep original entry_price)
+                    update_data = {
+                        "quantity": abs(position.quantity),  # Update quantity if changed
+                    }
+                    
+                    supabase.table("trades").update(update_data).eq("id", trade.get("id")).execute()
+                    logger.info(f"  🔄 Updated position: {position.symbol} (P&L: ₹{pnl:.2f})")
+                    
+                else:
+                    # CREATE new trade record for this position
                     trade_data = {
                         "user_id": user_id,
                         "symbol": position.symbol,
@@ -171,6 +204,42 @@ async def sync_broker_data():
                     }
                     supabase.table("trades").insert(trade_data).execute()
                     logger.info(f"  ✅ Added position: {position.symbol} x {position.quantity}")
+        
+        # Check for closed positions (in DB but not in broker)
+        logger.info("🔍 Checking for closed positions...")
+        open_trades = supabase.table("trades").select("id, symbol, entry_price, quantity, side").eq(
+            "user_id", user_id
+        ).eq("status", "OPEN").execute()
+        
+        if open_trades.data:
+            for trade in open_trades.data:
+                symbol = trade.get("symbol")
+                if symbol not in broker_symbols:
+                    # Position closed - get current price and mark as closed
+                    try:
+                        quote = await broker.get_quote(symbol)
+                        exit_price = quote.ltp if quote else trade.get("entry_price")
+                    except:
+                        exit_price = trade.get("entry_price")
+                    
+                    # Calculate realized P&L
+                    entry_price = trade.get("entry_price", 0)
+                    quantity = trade.get("quantity", 0)
+                    side = trade.get("side", "BUY")
+                    
+                    if side == "BUY":
+                        pnl = (exit_price - entry_price) * quantity
+                    else:
+                        pnl = (entry_price - exit_price) * quantity
+                    
+                    # Update trade as CLOSED
+                    supabase.table("trades").update({
+                        "status": "CLOSED",
+                        "exit_price": exit_price,
+                        "exit_timestamp": now_ist().isoformat()
+                    }).eq("id", trade.get("id")).execute()
+                    
+                    logger.info(f"  ❌ Closed position: {symbol} (Realized P&L: ₹{pnl:.2f})")
         
         # Fetch today's orders and update status
         logger.info("📋 Syncing order status...")
@@ -190,9 +259,25 @@ async def sync_broker_data():
                         new_status = order.status.upper() if hasattr(order, 'status') else "OPEN"
                         
                         if old_status != new_status:
-                            supabase.table("trades").update({"status": new_status}).eq(
+                            # Update status and add filled data if available
+                            update_data = {"status": new_status}
+                            
+                            # Add execution details if order is filled
+                            if new_status in ("COMPLETED", "COMPLETE", "FILLED"):
+                                if hasattr(order, 'average_price') and order.average_price:
+                                    update_data["entry_price"] = order.average_price
+                                if hasattr(order, 'filled_quantity') and order.filled_quantity:
+                                    update_data["quantity"] = order.filled_quantity
+                            
+                            supabase.table("trades").update(update_data).eq(
                                 "id", trade.get("id")
                             ).execute()
+                            logger.info(f"  ✅ Updated {order.order_id}: {old_status} → {new_status}")
+        
+        logger.info("✅ Broker sync complete")
+        
+    except Exception as e:
+        logger.error(f"❌ Broker sync error: {e}", exc_info=True)
                             logger.info(f"  ✅ Updated {order.order_id}: {old_status} → {new_status}")
         
         logger.info("✅ Broker sync complete")
