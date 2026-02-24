@@ -175,6 +175,7 @@ class SupabaseAuth:
             user_response = self.supabase.auth.get_user(token)
             
             if not user_response.user:
+                logger.warning("Token verification failed - no user returned")
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid or expired token"
@@ -182,9 +183,17 @@ class SupabaseAuth:
             
             user_id = user_response.user.id
             user_email = user_response.user.email
+            logger.debug(f"Token verified for user: {user_email}")
             
             # Get user profile from database
-            profile = self.supabase.table("users").select("*").eq("id", user_id).execute()
+            try:
+                profile = self.supabase.table("users").select("*").eq("id", user_id).execute()
+            except Exception as db_error:
+                logger.error(f"Database query error: {db_error}")
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Database connection error"
+                )
             
             if not profile.data:
                 # Auto-create profile for authenticated users without one
@@ -204,22 +213,44 @@ class SupabaseAuth:
                     "is_admin": False
                 }
                 
-                # Insert using admin client (bypasses RLS)
-                result = self.admin.table("users").insert(profile_data).execute()
-                
-                if not result.data:
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail="Failed to create user profile"
-                    )
-                
-                user_data = result.data[0]
-                logger.info(f"✅ Auto-created user profile: {user_email}")
+                try:
+                    # Insert using admin client (bypasses RLS)
+                    result = self.admin.table("users").insert(profile_data).execute()
+                    
+                    if not result.data:
+                        logger.error(f"Profile creation returned no data for: {user_email}")
+                        raise HTTPException(
+                            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail="Failed to create user profile"
+                        )
+                    
+                    user_data = result.data[0]
+                    logger.info(f"✅ Auto-created user profile: {user_email}")
+                except Exception as create_error:
+                    logger.error(f"Error creating user profile: {create_error}")
+                    # Try to fetch again in case it was created by another request
+                    try:
+                        profile = self.supabase.table("users").select("*").eq("id", user_id).execute()
+                        if profile.data:
+                            user_data = profile.data[0]
+                            logger.info(f"Profile found on retry for: {user_email}")
+                        else:
+                            raise HTTPException(
+                                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                                detail="Failed to create user profile"
+                            )
+                    except Exception:
+                        raise HTTPException(
+                            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail="Failed to create or retrieve user profile"
+                        )
             else:
                 user_data = profile.data[0]
+                logger.debug(f"Profile found for user: {user_email}")
             
             # Check if user is active
             if not user_data.get("is_active", True):
+                logger.warning(f"Inactive user attempted login: {user_email}")
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="User account is deactivated"
@@ -230,10 +261,10 @@ class SupabaseAuth:
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Token verification error: {str(e)}")
+            logger.error(f"Unexpected token verification error: {str(e)}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication credentials"
+                detail=f"Authentication error: {str(e)}"
             )
     
     async def refresh_token(self, refresh_token: str) -> Dict[str, Any]:
