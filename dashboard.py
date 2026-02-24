@@ -1488,21 +1488,18 @@ async def place_order(
                     except:
                         entry_price = 0.0
                 
-                # Create trade record
+                # Create trade record - use only fields that exist in Supabase
+                # Supabase schema: id, user_id, symbol, side, entry_price, quantity,
+                # entry_timestamp, broker_order_id, status, exit_price, exit_timestamp, created_at
                 trade_data = {
                     "user_id": current_user.get("id"),
                     "symbol": symbol,
-                    "strategy_name": "Manual Order",
-                    "direction": side.upper(),
+                    "side": side.upper(),  # Use 'side' not 'direction'
                     "entry_price": entry_price,
                     "quantity": quantity,
                     "entry_timestamp": now_ist().isoformat(),
-                    "stop_price": 0.0,  # Manual orders don't have auto SL
-                    "target_price": None,
-                    "risk_amount": 0.0,
                     "broker_order_id": order_result.order_id,
-                    "status": "OPEN",
-                    "notes": f"{order_type} order via dashboard"
+                    "status": "OPEN"
                 }
                 
                 result = supabase.table("trades").insert(trade_data).execute()
