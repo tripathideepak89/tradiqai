@@ -13,7 +13,7 @@ kiteconnect==5.0.1  # Latest version with Python 3.13 support
 pyotp==2.9.0
 
 # Database
-sqlalchemy==2.0.25
+sqlalchemy==2.0.36  # Python 3.13 compatible (TypingOnly fix)
 psycopg[binary]==3.2.3  # Python 3.13 compatible (psycopg3, not psycopg2)
 alembic==1.13.1
 redis==5.0.1
