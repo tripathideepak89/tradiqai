@@ -1051,8 +1051,11 @@ HTML_TEMPLATE = """
                 return;
             }
             
-            console.log('[WebSocket] Attempting to connect to ws://' + window.location.host + '/ws with authentication');
-            ws = new WebSocket(`ws://${window.location.host}/ws?token=${token}`);
+            // Use wss:// for HTTPS (production), ws:// for HTTP (localhost)
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${wsProtocol}//${window.location.host}/ws?token=${token}`;
+            console.log('[WebSocket] Attempting to connect to', wsUrl);
+            ws = new WebSocket(wsUrl);
             
             ws.onopen = () => {
                 console.log('[WebSocket] ✅ Connected successfully!');
