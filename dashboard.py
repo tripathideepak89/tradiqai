@@ -1389,6 +1389,23 @@ async def health_check_root():
             "error": str(e)
         }
 
+@app.get("/api/debug/env-check")
+async def env_check():
+    """
+    Diagnostic endpoint to check if Supabase environment variables are loaded
+    SECURITY: This should be removed or protected in production!
+    """
+    import os
+    return {
+        "SUPABASE_URL": "✅ SET" if os.getenv("SUPABASE_URL") else "❌ MISSING",
+        "SUPABASE_ANON_KEY": "✅ SET" if os.getenv("SUPABASE_ANON_KEY") else "❌ MISSING",
+        "SUPABASE_SERVICE_KEY": "✅ SET" if os.getenv("SUPABASE_SERVICE_KEY") else "❌ MISSING",
+        "SUPABASE_SERVICE_KEY_LENGTH": len(os.getenv("SUPABASE_SERVICE_KEY", "")) if os.getenv("SUPABASE_SERVICE_KEY") else 0,
+        "SUPABASE_SERVICE_KEY_PREFIX": os.getenv("SUPABASE_SERVICE_KEY", "")[:20] if os.getenv("SUPABASE_SERVICE_KEY") else "MISSING",
+        "ENV": os.getenv("ENV", "not_set"),
+        "DATABASE_URL": "✅ SET" if os.getenv("DATABASE_URL") else "❌ MISSING"
+    }
+
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint"""
