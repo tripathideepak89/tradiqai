@@ -3,6 +3,7 @@ fastapi==0.109.0
 uvicorn[standard]==0.27.0
 pydantic==2.10.4  # Python 3.13 compatible with pre-built wheels (pydantic-core 2.27.2)
 pydantic-settings==2.7.0  # Compatible with pydantic 2.10.4
+email-validator==2.2.0  # Required for pydantic EmailStr validation
 
 # Trading & Technical Analysis
 numpy==2.1.3  # Python 3.13 with pre-built wheels (numpy 2.x required for py3.13)
