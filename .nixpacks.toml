@@ -1,0 +1,21 @@
+# Force Python 3.11 for Railway deployment
+# This file is read by Nixpacks builder
+
+providers = ["python"]
+
+[phases.setup]
+nixPkgs = ["python311"]
+nixOverlays = []
+nixLibs = []
+
+[phases.install]
+cmds = [
+    "python3.11 -m venv /opt/venv",
+    "/opt/venv/bin/pip install --upgrade pip setuptools wheel",
+    "/opt/venv/bin/pip install -r requirements.txt",
+    "/opt/venv/bin/pip install -r requirements_auth.txt",
+    "/opt/venv/bin/pip install -r requirements_supabase.txt"
+]
+
+[start]
+cmd = "/opt/venv/bin/python -m uvicorn dashboard:app --host 0.0.0.0 --port $PORT"
