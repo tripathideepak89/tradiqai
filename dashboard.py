@@ -52,26 +52,6 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI
 app = FastAPI(title="TradiqAI Dashboard")
 
-# Database setup - delay connection until first use
-engine = None
-SessionLocal = None
-
-def get_db_engine():
-    """Lazy initialize database engine"""
-    global engine, SessionLocal
-    if engine is None:
-        try:
-            logger.info(f"Connecting to database...")
-            engine = create_engine(config.database_url, pool_pre_ping=True)
-            SessionLocal = sessionmaker(bind=engine)
-            logger.info("Database connection established")
-        except Exception as e:
-            logger.error(f"Database connection failed: {e}")
-            # Don't crash - allow app to start for health checks
-            engine = "failed"
-            SessionLocal = None
-    return engine
-
 # Quote cache (symbol -> {data, timestamp})
 quote_cache = {}
 QUOTE_CACHE_TTL = 30  # seconds
@@ -142,13 +122,12 @@ async def startup_event():
     
     # Initialize database connection
     try:
-        get_db_engine()
-        if engine and engine != "failed":
-            logger.info("✅ Database connection established")
-        else:
-            logger.warning("⚠️  Database connection failed - some features disabled")
+        from database import get_engine
+        engine = get_engine()
+        logger.info("✅ Database connection established")
     except Exception as e:
         logger.error(f"❌ Database initialization error: {e}")
+        logger.warning("⚠️  Some features may be unavailable")
     
     logger.info("✅ Dashboard startup complete")
 
@@ -1370,13 +1349,16 @@ async def get_dashboard():
 async def health_check_root():
     """Health check endpoint for Railway/load balancers"""
     try:
+        # Try to check database status without crashing
         db_status = "unknown"
-        if engine is None:
-            db_status = "not_initialized"
-        elif engine == "failed":
-            db_status = "failed"
-        else:
-            db_status = "connected"
+        try:
+            from database import _engine
+            if _engine is None:
+                db_status = "not_initialized"
+            else:
+                db_status = "connected"
+        except:
+            db_status = "unknown"
         
         return {
             "status": "healthy",

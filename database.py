@@ -4,25 +4,70 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from config import settings
 import redis
+import logging
 
-# PostgreSQL
-engine = create_engine(
-    settings.database_url,
-    pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20
-)
+logger = logging.getLogger(__name__)
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Lazy initialization to prevent import-time crashes
+_engine = None
+_SessionLocal = None
+_redis_client = None
+
 Base = declarative_base()
 
-# Redis
-redis_client = redis.from_url(settings.redis_url, decode_responses=True)
+
+def get_engine():
+    """Lazy initialize database engine"""
+    global _engine, _SessionLocal
+    if _engine is None:
+        try:
+            logger.info(f"Initializing database engine...")
+            _engine = create_engine(
+                settings.database_url,
+                pool_pre_ping=True,
+                pool_size=10,
+                max_overflow=20
+            )
+            _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
+            logger.info("Database engine initialized successfully")
+        except Exception as e:
+            logger.error(f"Database engine initialization failed: {e}")
+            raise
+    return _engine
+
+
+def get_session_local():
+    """Get SessionLocal (lazy initialized)"""
+    if _SessionLocal is None:
+        get_engine()  # Initialize if not already done
+    return _SessionLocal
+
+
+def get_redis_client():
+    """Lazy initialize Redis client"""
+    global _redis_client
+    if _redis_client is None:
+        try:
+            logger.info(f"Initializing Redis client...")
+            _redis_client = redis.from_url(settings.redis_url, decode_responses=True)
+            logger.info("Redis client initialized successfully")
+        except Exception as e:
+            logger.error(f"Redis initialization failed: {e}")
+            # Don't crash - Redis is optional for some features
+            _redis_client = None
+    return _redis_client
+
+
+# For backwards compatibility - but code should use get_engine(), etc.
+engine = None  # Will be set by get_engine()
+SessionLocal = None  # Will be set by get_session_local()
+redis_client = None  # Will be set by get_redis_client()
 
 
 def get_db():
     """Get database session"""
-    db = SessionLocal()
+    session_factory = get_session_local()
+    db = session_factory()
     try:
         yield db
     finally:
@@ -31,4 +76,5 @@ def get_db():
 
 def init_db():
     """Initialize database tables"""
-    Base.metadata.create_all(bind=engine)
+    eng = get_engine()
+    Base.metadata.create_all(bind=eng)
