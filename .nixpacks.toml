@@ -6,7 +6,7 @@ nixPkgs = ["python313", "gcc", "postgresql"]
 [phases.install]
 cmds = [
     "pip install --upgrade pip setuptools wheel",
-    "pip install numpy==1.26.4 pandas==2.2.3",
+    "pip install numpy==2.1.3 pandas==2.2.3",
     "pip install -r requirements.txt",
     "pip install -r requirements_auth.txt",
     "pip install -r requirements_supabase.txt"

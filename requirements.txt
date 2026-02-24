@@ -5,11 +5,11 @@ pydantic==2.5.3
 pydantic-settings==2.1.0
 
 # Trading & Technical Analysis
-numpy==1.26.4  # Python 3.13 compatible
+numpy==2.1.3  # Python 3.13 with pre-built wheels (numpy 2.x required for py3.13)
 pandas==2.2.3  # Python 3.13 compatible with pre-built wheels
 # TA-Lib==0.4.28  # Requires C libraries - moved to requirements_optional.txt
 ta>=0.11.0  # Pure Python alternative to TA-Lib
-kiteconnect==4.3.0
+kiteconnect==5.0.1  # Latest version (4.3.0 doesn't exist)
 pyotp==2.9.0
 
 # Database
