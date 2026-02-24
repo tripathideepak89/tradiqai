@@ -8,7 +8,7 @@ pydantic-settings==2.7.0  # Compatible with pydantic 2.10.4
 numpy==2.1.3  # Python 3.13 with pre-built wheels (numpy 2.x required for py3.13)
 pandas==2.2.3  # Python 3.13 compatible with pre-built wheels
 # TA-Lib==0.4.28  # Requires C libraries - moved to requirements_optional.txt
-ta>=0.11.0  # Pure Python alternative to TA-Lib
+ta==0.11.0  # Pure Python alternative to TA-Lib (pinned for reproducibility)
 kiteconnect==5.0.1  # Latest version with Python 3.13 support
 pyotp==2.9.0
 
