@@ -181,17 +181,42 @@ class SupabaseAuth:
                 )
             
             user_id = user_response.user.id
+            user_email = user_response.user.email
             
             # Get user profile from database
             profile = self.supabase.table("users").select("*").eq("id", user_id).execute()
             
             if not profile.data:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="User profile not found"
-                )
-            
-            user_data = profile.data[0]
+                # Auto-create profile for authenticated users without one
+                logger.info(f"Creating missing user profile for: {user_email}")
+                
+                profile_data = {
+                    "id": user_id,
+                    "email": user_email,
+                    "username": user_email.split('@')[0],
+                    "full_name": user_email.split('@')[0],
+                    "capital": 50000.0,
+                    "paper_trading": True,
+                    "max_daily_loss": 1500.0,
+                    "max_position_risk": 400.0,
+                    "max_open_positions": 2,
+                    "is_active": True,
+                    "is_admin": False
+                }
+                
+                # Insert using admin client (bypasses RLS)
+                result = self.admin.table("users").insert(profile_data).execute()
+                
+                if not result.data:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Failed to create user profile"
+                    )
+                
+                user_data = result.data[0]
+                logger.info(f"✅ Auto-created user profile: {user_email}")
+            else:
+                user_data = profile.data[0]
             
             # Check if user is active
             if not user_data.get("is_active", True):
