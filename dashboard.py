@@ -120,11 +120,15 @@ async def startup_event():
     """Initialize database and services on app startup"""
     logger.info("🚀 Starting TradiqAI Dashboard...")
     
-    # Initialize database connection
+    # Initialize database connection and create tables
     try:
-        from database import get_engine
+        from database import get_engine, init_db
         engine = get_engine()
         logger.info("✅ Database connection established")
+        
+        # Create all tables if they don't exist
+        init_db()
+        logger.info("✅ Database tables initialized")
     except Exception as e:
         logger.error(f"❌ Database initialization error: {e}")
         logger.warning("⚠️  Some features may be unavailable")

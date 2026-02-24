@@ -76,5 +76,8 @@ def get_db():
 
 def init_db():
     """Initialize database tables"""
+    # Import models so they're registered with Base.metadata
+    import models  # noqa: F401
+    
     eng = get_engine()
     Base.metadata.create_all(bind=eng)
