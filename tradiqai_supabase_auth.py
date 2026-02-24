@@ -227,7 +227,10 @@ class SupabaseAuth:
                     user_data = result.data[0]
                     logger.info(f"✅ Auto-created user profile: {user_email}")
                 except Exception as create_error:
-                    logger.error(f"Error creating user profile: {create_error}")
+                    logger.error(f"Error creating user profile: {create_error}", exc_info=True)
+                    logger.error(f"Create error type: {type(create_error).__name__}")
+                    logger.error(f"Create error details: {getattr(create_error, 'message', str(create_error))}")
+                    
                     # Try to fetch again in case it was created by another request
                     try:
                         profile = self.supabase.table("users").select("*").eq("id", user_id).execute()
@@ -237,12 +240,15 @@ class SupabaseAuth:
                         else:
                             raise HTTPException(
                                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                                detail="Failed to create user profile"
+                                detail=f"Failed to create user profile: {str(create_error)}"
                             )
-                    except Exception:
+                    except HTTPException:
+                        raise
+                    except Exception as retry_error:
+                        logger.error(f"Retry fetch also failed: {retry_error}", exc_info=True)
                         raise HTTPException(
                             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            detail="Failed to create or retrieve user profile"
+                            detail=f"Profile creation failed: {str(create_error)}; Retry failed: {str(retry_error)}"
                         )
             else:
                 user_data = profile.data[0]

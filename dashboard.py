@@ -1396,12 +1396,16 @@ async def env_check():
     SECURITY: This should be removed or protected in production!
     """
     import os
+    service_key = os.getenv("SUPABASE_SERVICE_KEY", "")
     return {
         "SUPABASE_URL": "✅ SET" if os.getenv("SUPABASE_URL") else "❌ MISSING",
         "SUPABASE_ANON_KEY": "✅ SET" if os.getenv("SUPABASE_ANON_KEY") else "❌ MISSING",
-        "SUPABASE_SERVICE_KEY": "✅ SET" if os.getenv("SUPABASE_SERVICE_KEY") else "❌ MISSING",
-        "SUPABASE_SERVICE_KEY_LENGTH": len(os.getenv("SUPABASE_SERVICE_KEY", "")) if os.getenv("SUPABASE_SERVICE_KEY") else 0,
-        "SUPABASE_SERVICE_KEY_PREFIX": os.getenv("SUPABASE_SERVICE_KEY", "")[:20] if os.getenv("SUPABASE_SERVICE_KEY") else "MISSING",
+        "SUPABASE_SERVICE_KEY": "✅ SET" if service_key else "❌ MISSING",
+        "SUPABASE_SERVICE_KEY_LENGTH": len(service_key),
+        "SUPABASE_SERVICE_KEY_PREFIX": service_key[:20] if service_key else "MISSING",
+        "SUPABASE_SERVICE_KEY_SUFFIX": service_key[-20:] if len(service_key) > 40 else "N/A",
+        "SUPABASE_SERVICE_KEY_PARTS": service_key.count('.') if service_key else 0,  # JWT should have 2 dots
+        "SUPABASE_SERVICE_KEY_VALID_JWT": len(service_key.split('.')) == 3 if service_key else False,
         "ENV": os.getenv("ENV", "not_set"),
         "DATABASE_URL": "✅ SET" if os.getenv("DATABASE_URL") else "❌ MISSING"
     }
