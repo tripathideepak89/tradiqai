@@ -1,68 +1,93 @@
+version: '3.8'
+
 services:
   # PostgreSQL Database
   postgres:
-    image: postgres:15-alpine
-    container_name: autotrade-postgres
+    image: postgres:16-alpine
+    container_name: tradiqai-postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: autotrade
+      POSTGRES_USER: tradiqai
+      POSTGRES_PASSWORD: tradiqai_password
+      POSTGRES_DB: tradiqai
+      PGDATA: /var/lib/postgresql/data/pgdata
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U tradiqai -d tradiqai"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - autotrade-network
+      - tradiqai-network
+    restart: unless-stopped
 
   # Redis Cache
   redis:
     image: redis:7-alpine
-    container_name: autotrade-redis
+    container_name: tradiqai-redis
     ports:
-      - "6380:6379"
+      - "6379:6379"
     volumes:
       - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - autotrade-network
+      - tradiqai-network
+    restart: unless-stopped
 
-  # Trading Application
+  # TradIQ AI Dashboard Application
   app:
     build: 
       context: .
       dockerfile: Dockerfile
-    container_name: autotrade-app
+    container_name: tradiqai-app
+    ports:
+      - "9000:9000"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
-      - DATABASE_URL=postgresql://postgres:password@postgres:5432/autotrade
+      # Application Settings
+      - ENV=production
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+      - PORT=9000
+      
+      # Database & Cache
+      - DATABASE_URL=postgresql://tradiqai:tradiqai_password@postgres:5432/tradiqai
       - REDIS_URL=redis://redis:6379/0
+      
+      # Python
       - PYTHONUNBUFFERED=1
     env_file:
       - .env
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
-    restart: unless-stopped
     networks:
-      - autotrade-network
+      - tradiqai-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
 volumes:
   postgres_data:
+    driver: local
   redis_data:
+    driver: local
 
 networks:
-  autotrade-network:
+  tradiqai-network:
     driver: bridge

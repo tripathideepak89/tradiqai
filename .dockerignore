@@ -1,0 +1,101 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info
+.installed.cfg
+*.egg
+.pytest_cache
+.mypy_cache
+.coverage
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.crt
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+autotrade.db
+
+# Build artifacts
+build/
+dist/
+*.pkg
+*.deb
+*.rpm
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Cloudflare Tunnel
+cloudflared.exe
+.cloudflared/
+*.json
+
+# Data & Backups
+data/
+backups/
+*.bak
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Documentation (not needed in runtime)
+*.md
+docs/
+
+# Testing
+tests/
+test_*.py
+*_test.py
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Railway/Render configs (not needed in Docker)
+railway.toml
+render.yaml
+.nixpacks.toml
+Procfile
+runtime.txt
+start.sh
+.env.railway
+RAILWAY_DEPLOYMENT.md
+RENDER_DEPLOYMENT.md
+DEPLOYMENT_READY.md
+QUICK_DEPLOY.md
+PYTHON_3.13_MIGRATION.md
