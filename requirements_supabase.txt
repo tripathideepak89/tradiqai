@@ -1,3 +1,4 @@
 # Supabase Integration
-supabase>=2.0.0
+supabase==2.15.2  # Pinned to prevent deep resolution
+realtime==2.4.1  # Pinned for compatibility
 postgrest-py>=0.10.0

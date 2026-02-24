@@ -20,7 +20,7 @@ redis==5.0.1
 
 # WebSocket & Async
 websockets==12.0
-aiohttp==3.9.1
+aiohttp==3.13.1  # Updated for Python 3.13 and supabase compatibility
 python-socketio==5.11.0
 
 # Monitoring & Alerts
