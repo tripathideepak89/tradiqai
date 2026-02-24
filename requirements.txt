@@ -1,20 +1,20 @@
 # Core Framework
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
-pydantic==2.5.3
-pydantic-settings==2.1.0
+pydantic==2.10.4  # Python 3.13 compatible with pre-built wheels (pydantic-core 2.27.2)
+pydantic-settings==2.7.0  # Compatible with pydantic 2.10.4
 
 # Trading & Technical Analysis
 numpy==2.1.3  # Python 3.13 with pre-built wheels (numpy 2.x required for py3.13)
 pandas==2.2.3  # Python 3.13 compatible with pre-built wheels
 # TA-Lib==0.4.28  # Requires C libraries - moved to requirements_optional.txt
 ta>=0.11.0  # Pure Python alternative to TA-Lib
-kiteconnect==5.0.1  # Latest version (4.3.0 doesn't exist)
+kiteconnect==5.0.1  # Latest version with Python 3.13 support
 pyotp==2.9.0
 
 # Database
 sqlalchemy==2.0.25
-psycopg2-binary==2.9.9
+psycopg[binary]==3.2.3  # Python 3.13 compatible (psycopg3, not psycopg2)
 alembic==1.13.1
 redis==5.0.1
 
