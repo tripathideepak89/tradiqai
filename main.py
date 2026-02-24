@@ -7,7 +7,7 @@ import sys
 from sqlalchemy.orm import Session
 
 from config import settings
-from database import SessionLocal, init_db, redis_client
+from database import get_session_local, init_db, redis_client
 from brokers.factory import BrokerFactory
 from brokers.base import BaseBroker, TransactionType, OrderType
 from risk_engine import RiskEngine
@@ -41,6 +41,7 @@ class TradingSystem:
     """Main trading system orchestrator"""
     
     def __init__(self):
+        SessionLocal = get_session_local()
         self.db: Session = SessionLocal()
         self.broker: BaseBroker = None
         self.risk_engine: RiskEngine = None
