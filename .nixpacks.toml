@@ -1,12 +1,12 @@
-# Force Python 3.11 for Railway deployment
+# Python 3.13 Railway deployment with optimized package installation
 
 [phases.setup]
-nixPkgs = ["python311"]
+nixPkgs = ["python313", "gcc", "postgresql"]
 
 [phases.install]
 cmds = [
-    "pip install --upgrade pip==24.0",
-    "pip install --only-binary=:all: numpy==1.24.3 pandas==2.0.3",
+    "pip install --upgrade pip setuptools wheel",
+    "pip install numpy==1.26.4 pandas==2.2.3",
     "pip install -r requirements.txt",
     "pip install -r requirements_auth.txt",
     "pip install -r requirements_supabase.txt"
