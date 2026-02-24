@@ -11,9 +11,9 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
     
     # Application
-    env: str = "development"
-    debug: bool = True
-    log_level: str = "INFO"
+    env: str = os.getenv("ENV", "development")
+    debug: bool = os.getenv("DEBUG", "true").lower() == "true"
+    log_level: str = os.getenv("LOG_LEVEL", "INFO")
     
     # Trading Configuration
     # Professional Risk Management Rules (Survival > Consistency > Growth)

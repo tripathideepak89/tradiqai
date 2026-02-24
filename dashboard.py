@@ -1321,6 +1321,11 @@ async def get_dashboard():
     }
     return HTMLResponse(content=HTML_TEMPLATE, headers=headers)
 
+@app.get("/health")
+async def health_check_root():
+    """Health check endpoint for Railway/load balancers"""
+    return {"status": "healthy", "timestamp": now_ist().isoformat()}
+
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint"""

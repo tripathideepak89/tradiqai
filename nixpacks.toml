@@ -1,0 +1,16 @@
+[phases.setup]
+nixPkgs = ["python311", "gcc", "postgresql"]
+
+[phases.install]
+cmds = [
+    "pip install --upgrade pip setuptools wheel",
+    "pip install -r requirements.txt",
+    "pip install -r requirements_auth.txt",
+    "pip install -r requirements_supabase.txt"
+]
+
+[phases.build]
+cmds = []
+
+[start]
+cmd = "uvicorn dashboard:app --host 0.0.0.0 --port $PORT"

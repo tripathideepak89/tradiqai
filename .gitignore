@@ -73,3 +73,12 @@ trade_logs/
 config.local.py
 secrets.yaml
 credentials.json
+
+# Cloudflare Tunnel
+cloudflared.exe
+.cloudflared/
+*-tunnel.json
+tunnel-*.txt
+deploy-tunnel.ps1
+install-service.ps1
+CLOUDFLARE_DEPLOYMENT_GUIDE.md
