@@ -127,8 +127,15 @@ async def startup_event():
         logger.info("✅ Database connection established")
         
         # Create all tables if they don't exist
-        init_db()
-        logger.info("✅ Database tables initialized")
+        try:
+            init_db()
+            logger.info("✅ Database tables initialized")
+        except Exception as init_error:
+            # Ignore errors about existing types/tables (safe to continue)
+            if "already exists" in str(init_error) or "duplicate key" in str(init_error):
+                logger.info("ℹ️  Database schema already exists (skipping creation)")
+            else:
+                raise  # Re-raise other errors
     except Exception as e:
         logger.error(f"❌ Database initialization error: {e}")
         logger.warning("⚠️  Some features may be unavailable")
