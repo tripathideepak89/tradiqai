@@ -85,6 +85,9 @@ news_ingestion = None
 news_detector = None
 news_polling_task = None
 
+# Background sync task
+broker_sync_task = None
+
 async def init_broker():
     global broker
     if broker is None:
@@ -111,6 +114,121 @@ async def init_news_system():
     #     print("📡 News polling started for dashboard")
 
 
+def is_market_open() -> bool:
+    """Check if market is currently open (9:15 AM - 3:30 PM IST)"""
+    current_time = now_ist()
+    # Market hours: 9:15 AM to 3:30 PM IST
+    market_open = current_time.replace(hour=9, minute=15, second=0, microsecond=0)
+    market_close = current_time.replace(hour=15, minute=30, second=0, microsecond=0)
+    
+    # Check if it's a weekday (Monday=0, Sunday=6)
+    is_weekday = current_time.weekday() < 5
+    
+    return is_weekday and market_open <= current_time <= market_close
+
+
+async def sync_broker_data():
+    """Sync positions and orders from broker to database"""
+    try:
+        await init_broker()
+        if not broker:
+            logger.warning("⚠️ Broker not connected, skipping sync")
+            return
+        
+        from tradiqai_supabase_config import get_supabase_admin
+        supabase = get_supabase_admin()
+        
+        # Get user (assuming single user for now - can be extended for multi-user)
+        users_result = supabase.table("users").select("id").limit(1).execute()
+        if not users_result.data:
+            logger.warning("⚠️ No users found, skipping sync")
+            return
+        
+        user_id = users_result.data[0].get("id")
+        
+        # Fetch current positions from broker
+        logger.info("📊 Syncing broker positions...")
+        positions = await broker.get_positions()
+        
+        if positions:
+            # Update positions in database
+            for position in positions:
+                # Check if position already exists in database
+                existing = supabase.table("trades").select("id, broker_order_id").eq(
+                    "symbol", position.symbol
+                ).eq("user_id", user_id).eq("status", "OPEN").execute()
+                
+                if not existing.data:
+                    # Create new trade record for this position
+                    trade_data = {
+                        "user_id": user_id,
+                        "symbol": position.symbol,
+                        "side": "BUY" if position.quantity > 0 else "SELL",
+                        "entry_price": position.average_price,
+                        "quantity": abs(position.quantity),
+                        "entry_timestamp": now_ist().isoformat(),
+                        "status": "OPEN"
+                    }
+                    supabase.table("trades").insert(trade_data).execute()
+                    logger.info(f"  ✅ Added position: {position.symbol} x {position.quantity}")
+        
+        # Fetch today's orders and update status
+        logger.info("📋 Syncing order status...")
+        orders = await broker.get_orders()
+        
+        if orders:
+            for order in orders:
+                # Update trade status if order is completed/rejected
+                if hasattr(order, 'order_id') and order.order_id:
+                    existing_trade = supabase.table("trades").select("id, status").eq(
+                        "broker_order_id", order.order_id
+                    ).execute()
+                    
+                    if existing_trade.data:
+                        trade = existing_trade.data[0]
+                        old_status = trade.get("status")
+                        new_status = order.status.upper() if hasattr(order, 'status') else "OPEN"
+                        
+                        if old_status != new_status:
+                            supabase.table("trades").update({"status": new_status}).eq(
+                                "id", trade.get("id")
+                            ).execute()
+                            logger.info(f"  ✅ Updated {order.order_id}: {old_status} → {new_status}")
+        
+        logger.info("✅ Broker sync complete")
+        
+    except Exception as e:
+        logger.error(f"❌ Broker sync error: {e}", exc_info=True)
+
+
+async def broker_sync_loop():
+    """Background task to sync broker data periodically"""
+    logger.info("🔄 Starting broker sync loop...")
+    
+    while True:
+        try:
+            # Sync broker data
+            await sync_broker_data()
+            
+            # Determine sleep interval based on market hours
+            if is_market_open():
+                sleep_seconds = 5 * 60  # 5 minutes during market hours
+                logger.info(f"💤 Next sync in 5 minutes (market open)")
+            else:
+                sleep_seconds = 60 * 60  # 1 hour outside market hours
+                logger.info(f"💤 Next sync in 1 hour (market closed)")
+            
+            await asyncio.sleep(sleep_seconds)
+            
+        except asyncio.CancelledError:
+            logger.info("🛑 Broker sync loop cancelled")
+            break
+        except Exception as e:
+            logger.error(f"❌ Error in broker sync loop: {e}", exc_info=True)
+            # Wait 5 minutes before retrying on error
+            await asyncio.sleep(5 * 60)
+
+
 # ============================================================================
 # Startup Event
 # ============================================================================
@@ -118,6 +236,8 @@ async def init_news_system():
 @app.on_event("startup")
 async def startup_event():
     """Initialize database and services on app startup"""
+    global broker_sync_task
+    
     logger.info("🚀 Starting TradiqAI Dashboard...")
     
     # Initialize database connection and create tables
@@ -140,7 +260,31 @@ async def startup_event():
         logger.error(f"❌ Database initialization error: {e}")
         logger.warning("⚠️  Some features may be unavailable")
     
+    # Start background broker sync task
+    if broker_sync_task is None:
+        broker_sync_task = asyncio.create_task(broker_sync_loop())
+        logger.info("✅ Broker sync task started (5min market hours, 1hr otherwise)")
+    
     logger.info("✅ Dashboard startup complete")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on app shutdown"""
+    global broker_sync_task
+    
+    logger.info("🛑 Shutting down TradiqAI Dashboard...")
+    
+    # Cancel broker sync task
+    if broker_sync_task:
+        broker_sync_task.cancel()
+        try:
+            await broker_sync_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("✅ Broker sync task stopped")
+    
+    logger.info("✅ Dashboard shutdown complete")
 
 
 # ============================================================================
