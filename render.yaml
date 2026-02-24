@@ -1,0 +1,94 @@
+services:
+  # Web Service - FastAPI Dashboard
+  - type: web
+    name: tradiqai-dashboard
+    runtime: python
+    plan: starter  # $7/month - change to 'free' for free tier (sleeps after inactivity)
+    region: singapore  # Closest to India for lower latency
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: uvicorn dashboard:app --host 0.0.0.0 --port $PORT --workers 2
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.8
+      - key: ENV
+        value: production
+      - key: DEBUG
+        value: false
+      - key: LOG_LEVEL
+        value: INFO
+      - key: BROKER
+        value: groww
+      # Trading Configuration
+      - key: INITIAL_CAPITAL
+        value: 50000
+      - key: MAX_DAILY_LOSS
+        value: 1500
+      - key: MAX_PER_TRADE_RISK
+        value: 400
+      - key: MAX_OPEN_TRADES
+        value: 4
+      - key: MAX_CAPITAL_PER_TRADE_PERCENT
+        value: 15.0
+      - key: MAX_EXPOSURE_PERCENT
+        value: 60
+      - key: CONSECUTIVE_LOSS_LIMIT
+        value: 3
+      # Groww API (set these as secrets in Render dashboard)
+      - key: GROWW_API_KEY
+        sync: false  # Mark as secret - set manually in dashboard
+      - key: GROWW_API_SECRET
+        sync: false  # Mark as secret - set manually in dashboard
+      - key: GROWW_API_URL
+        value: https://api.groww.in/v1
+      # Supabase Configuration (set as secrets)
+      - key: SUPABASE_URL
+        value: https://lmpajbaylwrlqtcqmwoo.supabase.co
+      - key: SUPABASE_ANON_KEY
+        sync: false  # Set manually in dashboard
+      - key: SUPABASE_SERVICE_KEY
+        sync: false  # Set manually in dashboard
+      - key: SUPABASE_DB_PASSWORD
+        sync: false  # Set manually in dashboard
+      # Database URLs (auto-populated by Render databases below)
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tradiqai-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromDatabase:
+          name: tradiqai-redis
+          property: connectionString
+      # Trading Hours
+      - key: MARKET_OPEN_TIME
+        value: "09:15"
+      - key: MARKET_CLOSE_TIME
+        value: "15:30"
+      # Strategy Settings
+      - key: ENABLE_INTRADAY
+        value: true
+      - key: ENABLE_SWING
+        value: true
+      - key: PAPER_TRADING
+        value: false
+      # Safety Settings
+      - key: ENABLE_KILL_SWITCH
+        value: true
+      - key: POSITION_RECONCILIATION_INTERVAL
+        value: 10
+
+databases:
+  # PostgreSQL Database
+  - name: tradiqai-postgres
+    databaseName: tradiqai
+    user: tradiqai_user
+    plan: starter  # $7/month - 256MB RAM, 1GB storage
+    region: singapore
+    ipAllowList: []  # Empty = allow all (needed for Render web service)
+
+  # Redis Cache
+  - name: tradiqai-redis
+    plan: starter  # $10/month - 25MB RAM, 25 connections
+    region: singapore
+    maxmemoryPolicy: allkeys-lru  # Eviction policy
+    ipAllowList: []
