@@ -185,9 +185,9 @@ class SupabaseAuth:
             user_email = user_response.user.email
             logger.debug(f"Token verified for user: {user_email}")
             
-            # Get user profile from database
+            # Get user profile from database using ADMIN client (bypasses RLS)
             try:
-                profile = self.supabase.table("users").select("*").eq("id", user_id).execute()
+                profile = self.admin.table("users").select("*").eq("id", user_id).execute()
             except Exception as db_error:
                 logger.error(f"Database query error: {db_error}")
                 raise HTTPException(
@@ -231,9 +231,9 @@ class SupabaseAuth:
                     logger.error(f"Create error type: {type(create_error).__name__}")
                     logger.error(f"Create error details: {getattr(create_error, 'message', str(create_error))}")
                     
-                    # Try to fetch again in case it was created by another request
+                    # Try to fetch again in case it was created by another request (use admin client)
                     try:
-                        profile = self.supabase.table("users").select("*").eq("id", user_id).execute()
+                        profile = self.admin.table("users").select("*").eq("id", user_id).execute()
                         if profile.data:
                             user_data = profile.data[0]
                             logger.info(f"Profile found on retry for: {user_email}")
