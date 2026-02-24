@@ -1414,11 +1414,12 @@ async def health_check():
 @app.post("/api/place_order")
 async def place_order(
     order_data: dict,
-    current_user: User = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """Place a new order (protected route)"""
-    """Place a manual trade order"""
     try:
+        logger.info(f"📝 Order request from user: {current_user.get('email', 'unknown')}")
+        logger.debug(f"Order data: {order_data}")
         # Initialize broker if needed
         await init_broker()
         
@@ -1479,11 +1480,15 @@ async def place_order(
             logger.error(f"❌ Order placement failed: No order ID returned")
             return {"success": False, "detail": "Order placement failed - no order ID returned"}
             
+    except HTTPException:
+        # Re-raise HTTP exceptions from get_current_user
+        raise
     except Exception as e:
-        logger.error(f"❌ Error placing order: {e}")
-        import traceback
-        traceback.print_exc()
-        return {"success": False, "detail": str(e)}
+        logger.error(f"❌ Error placing order: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Order placement failed: {str(e)}"
+        )
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
