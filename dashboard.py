@@ -1471,6 +1471,47 @@ async def place_order(
         
         if order_result and order_result.order_id:
             logger.info(f"✅ Order placed successfully: {order_result.order_id}")
+            
+            # Save trade to Supabase database
+            try:
+                from tradiqai_supabase_config import get_supabase_admin
+                supabase = get_supabase_admin()
+                
+                # Get current price (use price from order or fetch from broker)
+                entry_price = price if price else order_result.average_price if hasattr(order_result, 'average_price') else 0.0
+                
+                # If still no price, try to fetch current quote
+                if not entry_price:
+                    try:
+                        quote = await broker.get_quote(symbol)
+                        entry_price = quote.ltp if quote else 0.0
+                    except:
+                        entry_price = 0.0
+                
+                # Create trade record
+                trade_data = {
+                    "user_id": current_user.get("id"),
+                    "symbol": symbol,
+                    "strategy_name": "Manual Order",
+                    "direction": side.upper(),
+                    "entry_price": entry_price,
+                    "quantity": quantity,
+                    "entry_timestamp": now_ist().isoformat(),
+                    "stop_price": 0.0,  # Manual orders don't have auto SL
+                    "target_price": None,
+                    "risk_amount": 0.0,
+                    "broker_order_id": order_result.order_id,
+                    "status": "OPEN",
+                    "notes": f"{order_type} order via dashboard"
+                }
+                
+                result = supabase.table("trades").insert(trade_data).execute()
+                logger.info(f"💾 Trade saved to database: {result.data[0].get('id') if result.data else 'unknown'}")
+                
+            except Exception as db_error:
+                logger.error(f"⚠️ Failed to save trade to database: {db_error}", exc_info=True)
+                # Don't fail the order placement - broker order succeeded
+            
             return {
                 "success": True,
                 "order_id": order_result.order_id,
