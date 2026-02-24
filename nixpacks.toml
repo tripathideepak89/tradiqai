@@ -1,9 +1,10 @@
 [phases.setup]
-nixPkgs = ["python311", "gcc", "postgresql"]
+nixPkgs = ["python311", "gcc", "postgresql", "zlib", "libxml2", "libxslt"]
 
 [phases.install]
 cmds = [
     "pip install --upgrade pip setuptools wheel",
+    "pip install numpy pandas",
     "pip install -r requirements.txt",
     "pip install -r requirements_auth.txt",
     "pip install -r requirements_supabase.txt"

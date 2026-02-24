@@ -5,9 +5,10 @@ pydantic==2.5.3
 pydantic-settings==2.1.0
 
 # Trading & Technical Analysis
-pandas==2.2.0
 numpy==1.26.3
-TA-Lib==0.4.28
+pandas==2.2.0
+# TA-Lib==0.4.28  # Requires C libraries - moved to requirements_optional.txt
+ta>=0.11.0  # Pure Python alternative to TA-Lib
 kiteconnect==4.3.0
 pyotp==2.9.0
 

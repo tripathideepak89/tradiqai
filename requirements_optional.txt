@@ -1,0 +1,12 @@
+# Optional dependencies that require C compilation
+# These are NOT required for Railway deployment
+
+# TA-Lib - Technical Analysis Library (requires C libraries)
+# Installation: https://github.com/mrjbq7/ta-lib
+# Alternative: Use 'ta' package (pure Python) which is in requirements.txt
+TA-Lib==0.4.28
+
+# Note: If you need TA-Lib locally, install it separately:
+# Windows: Download from https://github.com/mrjbq7/ta-lib/releases
+# Linux/Mac: sudo apt-get install ta-lib OR brew install ta-lib
+# Then: pip install TA-Lib
