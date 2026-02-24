@@ -39,15 +39,38 @@ from news_impact_detector import NewsImpactDetector, NewsAction
 # Load environment
 load_dotenv()
 
+# Configure logging for Railway (write to stdout)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+
 # Logger
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI
 app = FastAPI(title="TradiqAI Dashboard")
 
-# Database setup
-engine = create_engine(config.database_url)
-SessionLocal = sessionmaker(bind=engine)
+# Database setup - delay connection until first use
+engine = None
+SessionLocal = None
+
+def get_db_engine():
+    """Lazy initialize database engine"""
+    global engine, SessionLocal
+    if engine is None:
+        try:
+            logger.info(f"Connecting to database...")
+            engine = create_engine(config.database_url, pool_pre_ping=True)
+            SessionLocal = sessionmaker(bind=engine)
+            logger.info("Database connection established")
+        except Exception as e:
+            logger.error(f"Database connection failed: {e}")
+            # Don't crash - allow app to start for health checks
+            engine = "failed"
+            SessionLocal = None
+    return engine
 
 # Quote cache (symbol -> {data, timestamp})
 quote_cache = {}
@@ -106,6 +129,28 @@ async def init_news_system():
     # if news_polling_task is None:
     #     news_polling_task = asyncio.create_task(news_ingestion.start_polling())
     #     print("📡 News polling started for dashboard")
+
+
+# ============================================================================
+# Startup Event
+# ============================================================================
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database and services on app startup"""
+    logger.info("🚀 Starting TradiqAI Dashboard...")
+    
+    # Initialize database connection
+    try:
+        get_db_engine()
+        if engine and engine != "failed":
+            logger.info("✅ Database connection established")
+        else:
+            logger.warning("⚠️  Database connection failed - some features disabled")
+    except Exception as e:
+        logger.error(f"❌ Database initialization error: {e}")
+    
+    logger.info("✅ Dashboard startup complete")
 
 
 # ============================================================================
@@ -1324,7 +1369,29 @@ async def get_dashboard():
 @app.get("/health")
 async def health_check_root():
     """Health check endpoint for Railway/load balancers"""
-    return {"status": "healthy", "timestamp": now_ist().isoformat()}
+    try:
+        db_status = "unknown"
+        if engine is None:
+            db_status = "not_initialized"
+        elif engine == "failed":
+            db_status = "failed"
+        else:
+            db_status = "connected"
+        
+        return {
+            "status": "healthy",
+            "timestamp": now_ist().isoformat(),
+            "database": db_status,
+            "app": "tradiqai-dashboard"
+        }
+    except Exception as e:
+        logger.error(f"Health check error: {e}")
+        # Still return healthy even if there's an error
+        return {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e)
+        }
 
 @app.get("/api/health")
 async def health_check():
