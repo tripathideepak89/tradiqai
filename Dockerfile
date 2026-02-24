@@ -57,11 +57,12 @@ RUN mkdir -p logs && chown -R appuser:appuser logs
 USER appuser
 
 # Expose port
+# Expose port (Railway will override with $PORT env var)
 EXPOSE 9000
 
-# Health check
+# Health check - use $PORT if set, otherwise 9000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:9000/health || exit 1
+    CMD curl -f http://localhost:${PORT:-9000}/health || exit 1
 
-# Run the application
-CMD ["uvicorn", "dashboard:app", "--host", "0.0.0.0", "--port", "9000", "--workers", "2"]
+# Run the application - use shell form to expand $PORT
+CMD uvicorn dashboard:app --host 0.0.0.0 --port ${PORT:-9000} --workers 2
