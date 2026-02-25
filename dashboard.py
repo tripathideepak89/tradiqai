@@ -2258,34 +2258,9 @@ async def get_dashboard_data(user_id: str) -> Dict:
         # Sort monitored stocks by day change % (highest first) - shows top movers at top
         monitored_stocks_data.sort(key=lambda x: x.get('day_change_percent', 0), reverse=True)
         
-        # Get recent news from database (shared across users)
-        news_start = time.time()
+        # News feed - Dashboard uses Supabase, not local SQLite
+        # TODO: Implement news feed from Supabase when news_items table is ready
         news_feed_data = []
-        try:
-            # Get news from last 24 hours, ordered by most recent first
-            from sqlalchemy import desc as sql_desc
-            cutoff = now_ist() - timedelta(hours=24)
-            
-            news_items = db.query(NewsItem).filter(
-                NewsItem.timestamp >= cutoff
-            ).order_by(sql_desc(NewsItem.timestamp)).limit(20).all()
-            
-            logger.debug(f"⏱️ News query: {time.time() - news_start:.3f}s - found {len(news_items)} items")
-            
-            for news in news_items:
-                news_feed_data.append({
-                    "symbol": news.symbol,
-                    "headline": news.headline,
-                    "timestamp": news.timestamp.isoformat() if news.timestamp else None,
-                    "impact_score": news.impact_score or 0,
-                    "direction": news.direction or "NEUTRAL",
-                    "category": news.category or "general"
-                })
-                
-        except Exception as e:
-            logger.warning(f"Error reading news from database: {e}")
-            # Fallback to empty news
-            news_feed_data = []
         
         total_time = time.time() - start_time
         print(f"✅ Dashboard data complete in {total_time:.3f}s - returning {len(monitored_stocks_data)} stocks, {len(positions_data)} positions, {len(trades_data)} trades")
