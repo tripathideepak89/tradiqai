@@ -39,11 +39,24 @@ from news_impact_detector import NewsImpactDetector, NewsAction
 # Load environment
 load_dotenv()
 
-# Configure logging for Railway (write to stdout)
+# Custom formatter with IST timezone
+class ISTFormatter(logging.Formatter):
+    """Logging formatter that displays timestamps in IST"""
+    def formatTime(self, record, datefmt=None):
+        from utils import now_ist
+        dt = now_ist()
+        if datefmt:
+            return dt.strftime(datefmt)
+        return dt.strftime('%Y-%m-%d %H:%M:%S IST')
+
+# Configure logging for Railway (write to stdout) with IST timestamps
+ist_formatter = ISTFormatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(ist_formatter)
+
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler()]
+    handlers=[console_handler]
 )
 
 # Logger
@@ -394,6 +407,26 @@ async def login(user_login: UserLogin):
     except Exception as e:
         logger.error(f"Login error: {e}")
         raise HTTPException(status_code=500, detail="Login failed")
+
+
+@app.post("/api/auth/refresh", response_model=Token)
+async def refresh_token(refresh_request: dict):
+    """Refresh access token using refresh token"""
+    try:
+        refresh_token = refresh_request.get("refresh_token")
+        if not refresh_token:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="refresh_token is required"
+            )
+        
+        token_data = await auth_manager.refresh_token(refresh_token)
+        return token_data
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Token refresh error: {e}")
+        raise HTTPException(status_code=401, detail="Token refresh failed")
 
 
 @app.get("/api/auth/me")
@@ -1110,7 +1143,7 @@ HTML_TEMPLATE = """
         
         // Get current user info
         async function getUserInfo() {
-            const token = localStorage.getItem('access_token');
+            const token = await getValidToken();
             if (!token) return;
             
             try {
@@ -1124,11 +1157,13 @@ HTML_TEMPLATE = """
                     const user = await response.json();
                     document.getElementById('userInfo').textContent = `👤 ${user.username} | Capital: ₹${user.capital.toLocaleString()}`;
                 } else if (response.status === 401) {
-                    // Token expired or invalid
-                    console.log('[Auth] Token expired, redirecting to login');
-                    localStorage.removeItem('access_token');
-                    localStorage.removeItem('refresh_token');
-                    window.location.href = '/login';
+                    // Token expired or invalid - try refreshing
+                    console.log('[Auth] Token expired, attempting refresh...');
+                    const newToken = await refreshAccessToken();
+                    if (newToken) {
+                        // Retry with new token
+                        getUserInfo();
+                    }
                 }
             } catch (error) {
                 console.error('[Auth] Error fetching user info:', error);
@@ -1179,8 +1214,13 @@ HTML_TEMPLATE = """
             sellBtn.disabled = true;
             
             try {
-                // Send order to backend with auth token
-                const token = localStorage.getItem('access_token');
+                // Get valid token (refresh if needed)
+                const token = await getValidToken();
+                if (!token) {
+                    showAlert('❌ Authentication failed. Please login again.', 'error');
+                    return;
+                }
+                
                 const response = await fetch('/api/place_order', {
                     method: 'POST',
                     headers: {
@@ -1265,12 +1305,110 @@ HTML_TEMPLATE = """
             }
         }
         
-        function connect() {
-            // Get auth token
-            const token = localStorage.getItem('access_token');
-            if (!token) {
-                console.error('[WebSocket] No auth token found');
+        // ============================================================================
+        // Token Management
+        // ============================================================================
+        
+        // Decode JWT token and extract expiration time
+        function decodeJWT(token) {
+            try {
+                const base64Url = token.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join(''));
+                return JSON.parse(jsonPayload);
+            } catch (error) {
+                console.error('[Auth] Error decoding JWT:', error);
+                return null;
+            }
+        }
+        
+        // Check if token is expired or expiring soon (within 5 minutes)
+        function isTokenExpiringSoon(token) {
+            const decoded = decodeJWT(token);
+            if (!decoded || !decoded.exp) {
+                return true; // Assume expired if can't decode
+            }
+            
+            const expirationTime = decoded.exp * 1000; // Convert to milliseconds
+            const currentTime = Date.now();
+            const fiveMinutes = 5 * 60 * 1000;
+            
+            // Token expires soon if it expires within 5 minutes
+            return (expirationTime - currentTime) < fiveMinutes;
+        }
+        
+        // Refresh the access token using refresh_token
+        async function refreshAccessToken() {
+            const refreshToken = localStorage.getItem('refresh_token');
+            if (!refreshToken) {
+                console.error('[Auth] No refresh token found');
                 window.location.href = '/login';
+                return null;
+            }
+            
+            try {
+                console.log('[Auth] Refreshing access token...');
+                const response = await fetch('/api/auth/refresh', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ refresh_token: refreshToken })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    localStorage.setItem('access_token', data.access_token);
+                    if (data.refresh_token) {
+                        localStorage.setItem('refresh_token', data.refresh_token);
+                    }
+                    console.log('[Auth] ✅ Token refreshed successfully');
+                    return data.access_token;
+                } else {
+                    console.error('[Auth] Failed to refresh token, status:', response.status);
+                    // Refresh token expired or invalid - redirect to login
+                    localStorage.removeItem('access_token');
+                    localStorage.removeItem('refresh_token');
+                    window.location.href = '/login';
+                    return null;
+                }
+            } catch (error) {
+                console.error('[Auth] Error refreshing token:', error);
+                window.location.href = '/login';
+                return null;
+            }
+        }
+        
+        // Get valid token (refresh if needed)
+        async function getValidToken() {
+            let token = localStorage.getItem('access_token');
+            
+            if (!token) {
+                console.error('[Auth] No access token found');
+                window.location.href = '/login';
+                return null;
+            }
+            
+            // Check if token is expired or expiring soon
+            if (isTokenExpiringSoon(token)) {
+                console.log('[Auth] Token expiring soon, refreshing...');
+                token = await refreshAccessToken();
+            }
+            
+            return token;
+        }
+        
+        // ============================================================================
+        // WebSocket Connection with Token Refresh
+        // ============================================================================
+        
+        async function connect() {
+            // Get valid token (refresh if needed)
+            const token = await getValidToken();
+            if (!token) {
+                console.error('[WebSocket] No valid auth token found');
                 return;
             }
             
@@ -1304,11 +1442,22 @@ HTML_TEMPLATE = """
                 }
             };
             
-            ws.onclose = () => {
-                console.warn('[WebSocket] ⚠️ Connection closed, reconnecting in 3s...');
+            ws.onclose = (event) => {
+                console.warn('[WebSocket] ⚠️ Connection closed, code:', event.code, 'reason:', event.reason);
                 document.getElementById('lastUpdate').textContent = 'Reconnecting...';
                 document.getElementById('lastUpdate').style.color = 'orange';
-                setTimeout(connect, 3000);
+                
+                // If closed due to auth failure (403), refresh token and reconnect
+                if (event.code === 1008 || event.reason.includes('403') || event.reason.includes('auth')) {
+                    console.log('[WebSocket] Auth failure detected, refreshing token...');
+                    setTimeout(async () => {
+                        await refreshAccessToken();
+                        connect();
+                    }, 1000);
+                } else {
+                    // Normal reconnection
+                    setTimeout(connect, 3000);
+                }
             };
             
             ws.onerror = (error) => {
@@ -1549,6 +1698,15 @@ HTML_TEMPLATE = """
                 if (checkAuth()) {
                     getUserInfo();
                     connect();
+                    
+                    // Start periodic token refresh (every 30 minutes)
+                    setInterval(async () => {
+                        const token = localStorage.getItem('access_token');
+                        if (token && isTokenExpiringSoon(token)) {
+                            console.log('[Auth] Proactive token refresh...');
+                            await refreshAccessToken();
+                        }
+                    }, 30 * 60 * 1000); // 30 minutes
                 }
             });
         } else {
@@ -1556,6 +1714,15 @@ HTML_TEMPLATE = """
             if (checkAuth()) {
                 getUserInfo();
                 connect();
+                
+                // Start periodic token refresh (every 30 minutes)
+                setInterval(async () => {
+                    const token = localStorage.getItem('access_token');
+                    if (token && isTokenExpiringSoon(token)) {
+                        console.log('[Auth] Proactive token refresh...');
+                        await refreshAccessToken();
+                    }
+                }, 30 * 60 * 1000); // 30 minutes
             }
         }
     </script>
