@@ -278,12 +278,6 @@ async def sync_broker_data():
         
     except Exception as e:
         logger.error(f"❌ Broker sync error: {e}", exc_info=True)
-                            logger.info(f"  ✅ Updated {order.order_id}: {old_status} → {new_status}")
-        
-        logger.info("✅ Broker sync complete")
-        
-    except Exception as e:
-        logger.error(f"❌ Broker sync error: {e}", exc_info=True)
 
 
 async def broker_sync_loop():
