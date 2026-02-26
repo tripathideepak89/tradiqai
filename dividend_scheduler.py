@@ -360,6 +360,20 @@ def register_dre_routes(app, get_db):
         logger.warning("FastAPI not available — skipping route registration.")
         return
 
+    import decimal as _decimal
+    import datetime as _datetime
+
+    def _serialize(obj):
+        """Convert psycopg2 non-JSON types to JSON-safe Python types."""
+        if isinstance(obj, _decimal.Decimal):
+            return float(obj)
+        if isinstance(obj, (_datetime.date, _datetime.datetime)):
+            return obj.isoformat()
+        return obj
+
+    def _rows_to_json(cols, rows):
+        return [{c: _serialize(v) for c, v in zip(cols, r)} for r in rows]
+
     @app.get("/api/dividends/upcoming")
     def get_upcoming_dividends(db=Depends(get_db)):
         """Return upcoming dividends with DRE scores for the Radar UI."""
@@ -383,7 +397,7 @@ def register_dre_routes(app, get_db):
             cur.execute(sql)
             cols = [desc[0] for desc in cur.description]
             rows = cur.fetchall()
-        return JSONResponse([dict(zip(cols, r)) for r in rows])
+        return JSONResponse(_rows_to_json(cols, rows))
 
     @app.get("/api/dividends/signals")
     def get_entry_signals(db=Depends(get_db)):
@@ -399,7 +413,7 @@ def register_dre_routes(app, get_db):
             cur.execute(sql)
             cols = [desc[0] for desc in cur.description]
             rows = cur.fetchall()
-        return JSONResponse([dict(zip(cols, r)) for r in rows])
+        return JSONResponse(_rows_to_json(cols, rows))
 
     @app.post("/api/dividends/refresh")
     def trigger_refresh():

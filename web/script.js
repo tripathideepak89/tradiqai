@@ -27,13 +27,29 @@ function renderDividendRadarTable(data) {
     });
 }
 
-// Example: Hook into dashboard data update (WebSocket or API)
-// Replace this with your actual dashboard data update logic
+// Fetch DRE data from API and render the Dividend Radar table
+async function fetchDividendRadar() {
+    const alert = document.getElementById('dividend-radar-alert');
+    try {
+        const res = await fetch('/api/dividends/upcoming');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        renderDividendRadarTable(data);
+        if (alert) alert.innerHTML = '';
+    } catch (e) {
+        if (alert) alert.innerHTML = `<p style="color:#f5c518;font-size:12px;">⚠️ DRE data unavailable — run the scheduler or visit <a href="/dividend-radar" style="color:#00c4ff">📡 DRE Dashboard</a> for full UI.</p>`;
+    }
+}
+
+// Hook into dashboard data update (WebSocket or API)
 function onDashboardDataUpdate(dashboardData) {
     if (dashboardData && dashboardData.dividend_radar) {
         renderDividendRadarTable(dashboardData.dividend_radar);
     }
 }
+
+// Load DRE data on page load
+document.addEventListener('DOMContentLoaded', fetchDividendRadar);
 // Smooth scrolling for anchor links
 document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     anchor.addEventListener('click', function (e) {

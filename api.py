@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 from typing import List, Dict
 from datetime import date, datetime
 from pydantic import BaseModel
-from templates import templates
+from fastapi.templating import Jinja2Templates
+templates = Jinja2Templates(directory="templates")
 
 from database import SessionLocal
 from models import Trade, DailyMetrics, SystemLog
@@ -20,16 +21,26 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Register DRE API endpoints
-register_dre_routes(app, get_db)
-
-# Dependency
+# Dependency (must be defined before register_dre_routes)
 def get_db():
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
+
+# Raw psycopg2 connection for DRE routes (which use .cursor() API)
+def get_raw_db():
+    import psycopg2
+    import os
+    conn = psycopg2.connect(os.environ.get("DATABASE_URL", ""))
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+# Register DRE API endpoints
+register_dre_routes(app, get_raw_db)
 
 
 # Pydantic models
