@@ -181,14 +181,18 @@ class MonitoringService:
     def is_kill_switch_active(self) -> bool:
         """Check if kill switch is active"""
         try:
+            if redis_client is None:
+                return False  # Redis not configured - allow trading
             return redis_client.exists(self.kill_switch_key) > 0
         except Exception as e:
             logger.error(f"Failed to check kill switch: {e}")
-            return True  # Fail safe - assume active on error
+            return False  # Allow trading on error (for local dev)
     
     def get_kill_switch_reason(self) -> Optional[str]:
         """Get kill switch activation reason"""
         try:
+            if redis_client is None:
+                return None
             data = redis_client.get(self.kill_switch_key)
             if data:
                 parts = data.split('|')

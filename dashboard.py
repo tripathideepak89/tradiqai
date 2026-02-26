@@ -2013,6 +2013,11 @@ async def get_dashboard_data(user_id: str) -> Dict:
     """Gather all dashboard data for a specific user (Supabase version)"""
     start_time = time.time()
     try:
+        # Always sync broker data before fetching dashboard data
+        try:
+            await sync_broker_data()
+        except Exception as sync_exc:
+            print(f"⚠️ Broker sync failed: {sync_exc}")
         from tradiqai_supabase_config import get_supabase_client, get_supabase_admin
         supabase = get_supabase_admin()  # Use admin client to bypass RLS
         
@@ -2224,33 +2229,50 @@ async def get_dashboard_data(user_id: str) -> Dict:
         trades_start = time.time()
         today_start = today_ist().isoformat()
         
+
         trades_response = supabase.table("trades").select("*").eq("user_id", user_id).gte("entry_timestamp", today_start).order("entry_timestamp", desc=True).limit(10).execute()
         trades = trades_response.data if trades_response.data else []
         logger.debug(f"⏱️ Trades query: {time.time() - trades_start:.3f}s")
-        
+
         trades_data = []
         total_realized_pnl = 0.0
         winning_trades = 0
-        
+
+        # --- Automatic P&L fix for closed trades ---
         for trade in trades:
             pnl = trade.get("pnl", 0.0) or 0.0
+            status = trade.get("status", "OPEN")
+            entry_price = trade.get("entry_price")
+            exit_price = trade.get("exit_price")
+            quantity = trade.get("quantity")
+            side = trade.get("side", "BUY")
+
+            # If trade is CLOSED and pnl is missing/zero, but exit_price exists, calculate and update
+            if status == "CLOSED" and (pnl == 0 or pnl is None) and entry_price is not None and exit_price is not None and quantity:
+                try:
+                    if side == "BUY":
+                        pnl = (exit_price - entry_price) * quantity
+                    else:
+                        pnl = (entry_price - exit_price) * quantity
+                    # Update Supabase with calculated pnl
+                    supabase.table("trades").update({"pnl": pnl}).eq("id", trade.get("id")).execute()
+                except Exception as e:
+                    print(f"⚠️ Failed to auto-update P&L for trade {trade.get('id')}: {e}")
+
             total_realized_pnl += pnl
             if pnl > 0:
                 winning_trades += 1
-            
-            # Map side for display
-            side = trade.get("side", "BUY")
-            
+
             trades_data.append({
                 "timestamp": trade.get("entry_timestamp"),
                 "symbol": trade.get("symbol"),
                 "side": side,
-                "quantity": trade.get("quantity"),
-                "price": trade.get("entry_price"),
+                "quantity": quantity,
+                "price": entry_price,
                 "pnl": pnl,
-                "status": trade.get("status")
+                "status": status
             })
-        
+
         # Calculate performance metrics
         total_pnl = total_realized_pnl + total_unrealized_pnl
         win_rate = (winning_trades / len(trades) * 100) if trades else 0
@@ -2281,7 +2303,9 @@ async def get_dashboard_data(user_id: str) -> Dict:
             "trades": trades_data,
             "monitored_stocks": monitored_stocks_data,
             "news_feed": news_feed_data,
-            "signals": 0  # We can add signal tracking later
+            "signals": 0,  # We can add signal tracking later
+            # Dividend Radar Engine candidates (if scheduler has run)
+            "dividend_radar": []
         }
         
     except Exception as e:

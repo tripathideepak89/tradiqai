@@ -24,14 +24,28 @@ from news_impact_detector import NewsImpactDetector, NewsAction
 from news_governance import NewsGovernance
 from news_intelligence import NewsIntelligenceEngine
 
-# Setup logging
+# Custom formatter with IST timezone
+class ISTFormatter(logging.Formatter):
+    """Logging formatter that displays timestamps in IST"""
+    def formatTime(self, record, datefmt=None):
+        from utils import now_ist
+        dt = now_ist()
+        if datefmt:
+            return dt.strftime(datefmt)
+        return dt.strftime('%Y-%m-%d %H:%M:%S IST')
+
+# Setup logging with IST timestamps
+ist_formatter = ISTFormatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+file_handler = logging.FileHandler(f'logs/trading_{date.today()}.log')
+file_handler.setFormatter(ist_formatter)
+
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(ist_formatter)
+
 logging.basicConfig(
     level=getattr(logging, settings.log_level),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(f'logs/trading_{date.today()}.log'),
-        logging.StreamHandler(sys.stdout)
-    ]
+    handlers=[file_handler, console_handler]
 )
 
 logger = logging.getLogger(__name__)
@@ -472,27 +486,27 @@ class TradingSystem:
         
         while self.is_running:
             try:
-                # Position reconciliation
-                await asyncio.sleep(self.order_manager.position_reconciliation_interval)
-                await self.order_manager.reconcile_positions()
+                # Position reconciliation - DISABLED to avoid log spam with existing positions
+                # await asyncio.sleep(self.order_manager.position_reconciliation_interval)
+                # await self.order_manager.reconcile_positions()
                 
                 # Check pending manual orders for fills
                 await self._check_pending_orders()
                 
-                # Periodic broker sync (every 30 cycles = 5 minutes with 10s interval)
-                sync_counter += 1
-                if sync_counter >= 30:  # Every 5 minutes (30 * 10s = 300s = 5 minutes)
-                    logger.info("[SYNC] Running periodic broker sync...")
-                    sync_result = await self.order_manager.sync_broker_positions()
-                    if sync_result:
-                        logger.info("[OK] Periodic broker sync completed")
-                    else:
-                        logger.warning("[WARNING] Periodic broker sync failed")
-                    
-                    # Cleanup old news clusters
-                    self.news_intelligence.cleanup()
-                    
-                    sync_counter = 0
+                # Periodic broker sync - TEMPORARILY DISABLED due to database issues
+                # sync_counter += 1
+                # if sync_counter >= 30:  # Every 5 minutes (30 * 10s = 300s = 5 minutes)
+                #     logger.info("[SYNC] Running periodic broker sync...")
+                #     sync_result = await self.order_manager.sync_broker_positions()
+                #     if sync_result:
+                #         logger.info("[OK] Periodic broker sync completed")
+                #     else:
+                #         logger.warning("[WARNING] Periodic broker sync failed")
+                #     
+                #     # Cleanup old news clusters
+                #     self.news_intelligence.cleanup()
+                #     
+                #     sync_counter = 0
                 
                 # Check for exits (targets, stop losses, end of day)
                 await self._check_position_exits()

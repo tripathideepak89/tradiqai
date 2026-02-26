@@ -1,6 +1,7 @@
 """Groww broker adapter"""
 import logging
 import uuid
+import asyncio
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 import aiohttp
@@ -322,6 +323,9 @@ class GrowwBroker(BaseBroker):
     async def get_quote(self, symbol: str) -> Quote:
         """Get quote"""
         try:
+            # Rate limiting: wait 0.5 seconds between requests
+            await asyncio.sleep(0.5)
+            
             response = await self._make_request(
                 "GET",
                 "live-data/quote",

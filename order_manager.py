@@ -799,6 +799,14 @@ class OrderManager:
         try:
             logger.info("[SYNC] Starting broker position sync...")
             
+            # Get a user_id from the database (use first user if exists)
+            from models import User
+            user = self.db.query(User).filter(User.is_active == True).first()
+            if not user:
+                logger.error("No active users found in database - cannot sync positions")
+                return False
+            user_id = user.id
+            
             # Get all broker positions
             broker_positions = await self.broker.get_positions()
             
@@ -850,6 +858,7 @@ class OrderManager:
                     direction = TradeDirection.LONG if pos.quantity > 0 else TradeDirection.SHORT
                     
                     new_trade = Trade(
+                        user_id=user_id,  # Add user_id for synced positions
                         symbol=symbol,
                         strategy_name="live_simple",  # Default
                         direction=direction,

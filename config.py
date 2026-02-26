@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     groww_api_url: str = "https://api.groww.in/v1"
     
     # Database
-    database_url: str = "postgresql://postgres:password@localhost:5432/autotrade"
+    database_url: str = "sqlite:///./autotrade.db"  # Local SQLite for development
     redis_url: str = "redis://localhost:6379/0"
     
     # Supabase

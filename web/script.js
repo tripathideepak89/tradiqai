@@ -1,3 +1,39 @@
+// --- Dividend Radar Table Rendering ---
+function renderDividendRadarTable(data) {
+    const tbody = document.getElementById('dividend-radar-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="12">No dividend candidates detected.</td></tr>';
+        return;
+    }
+    data.forEach(candidate => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${candidate.symbol || ''}</td>
+            <td>${candidate.company_name || ''}</td>
+            <td>${candidate.ex_date || ''}</td>
+            <td>${candidate.yield_percent != null ? candidate.yield_percent.toFixed(2) : ''}</td>
+            <td>${candidate.roe != null ? candidate.roe.toFixed(2) : ''}</td>
+            <td>${candidate.payout_ratio != null ? candidate.payout_ratio.toFixed(2) : ''}</td>
+            <td>${candidate.price != null ? candidate.price.toFixed(2) : ''}</td>
+            <td>${candidate.dma_20 != null ? candidate.dma_20.toFixed(2) : ''}</td>
+            <td>${candidate.dma_50 != null ? candidate.dma_50.toFixed(2) : ''}</td>
+            <td>${candidate.dma_200 != null ? candidate.dma_200.toFixed(2) : ''}</td>
+            <td>${candidate.dividend_score != null ? candidate.dividend_score : ''}</td>
+            <td>${candidate.trend || ''}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+// Example: Hook into dashboard data update (WebSocket or API)
+// Replace this with your actual dashboard data update logic
+function onDashboardDataUpdate(dashboardData) {
+    if (dashboardData && dashboardData.dividend_radar) {
+        renderDividendRadarTable(dashboardData.dividend_radar);
+    }
+}
 // Smooth scrolling for anchor links
 document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     anchor.addEventListener('click', function (e) {
