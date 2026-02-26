@@ -1,11 +1,11 @@
 """FastAPI web interface for monitoring and control"""
-from fastapi import FastAPI, HTTPException, Depends
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 from typing import List, Dict
 from datetime import date, datetime
 from pydantic import BaseModel
-
+from templates import templates
 
 from database import SessionLocal
 from models import Trade, DailyMetrics, SystemLog
@@ -256,6 +256,10 @@ async def get_performance_summary(db: Session = Depends(get_db)):
         "largest_loss": round(min(t.net_pnl for t in losers), 2) if losers else 0
     }
 
+
+@app.get("/dividend-radar", response_class=HTMLResponse)
+async def dividend_radar(request: Request):
+    return templates.TemplateResponse("dividend_radar.html", {"request": request})
 
 if __name__ == "__main__":
     import uvicorn

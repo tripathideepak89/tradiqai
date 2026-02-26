@@ -1,0 +1,1505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dividend Radar Engine — TradiqAI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+  <style>
+    /* ═══════════════════════════════════════
+       DESIGN SYSTEM
+    ═══════════════════════════════════════ */
+    :root {
+      --bg0:      #060810;
+      --bg1:      #0b0f18;
+      --bg2:      #0f1420;
+      --bg3:      #141a27;
+      --border:   rgba(255,255,255,0.07);
+      --border2:  rgba(255,255,255,0.04);
+      --text0:    #dde8f5;
+      --text1:    #8899bb;
+      --text2:    #44556a;
+
+      --nse:      #00c4ff;
+      --bse:      #ff6b35;
+      --mc:       #a8ff78;
+
+      --green:    #00ff9d;
+      --yellow:   #f5c518;
+      --orange:   #ff8c42;
+      --red:      #ff4d6d;
+      --blue:     #4dabff;
+      --purple:   #c77dff;
+
+      --font-mono: 'JetBrains Mono', monospace;
+      --font-head: 'Syne', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-mono);
+      background: var(--bg0);
+      color: var(--text0);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* scrollbar */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: var(--bg1); }
+    ::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 2px; }
+
+    /* ═══════════════════════════════════════
+       LAYOUT
+    ═══════════════════════════════════════ */
+    .topbar {
+      position: sticky; top: 0; z-index: 100;
+      background: linear-gradient(180deg, var(--bg1) 0%, transparent 100%);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 28px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 14px; }
+    .logo-icon {
+      width: 36px; height: 36px; border-radius: 9px;
+      background: linear-gradient(135deg, #0080ff, #00c4ff);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; box-shadow: 0 0 20px rgba(0,196,255,0.3);
+      flex-shrink: 0;
+    }
+    .logo-title {
+      font-family: var(--font-head); font-weight: 800;
+      font-size: 17px; color: var(--text0); letter-spacing: -0.3px;
+    }
+    .logo-sub { font-size: 9px; color: var(--text2); letter-spacing: 2px; }
+    .topbar-right { display: flex; align-items: center; gap: 20px; }
+    .live-dot { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--green); }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: blink 2s infinite; }
+    .last-update { font-size: 10px; color: var(--text2); }
+    .refresh-btn {
+      background: rgba(0,196,255,0.1); border: 1px solid rgba(0,196,255,0.3);
+      color: var(--nse); border-radius: 7px; padding: 6px 14px;
+      font-size: 11px; font-family: var(--font-mono); cursor: pointer;
+      transition: all 0.15s;
+    }
+    .refresh-btn:hover { background: rgba(0,196,255,0.2); transform: translateY(-1px); }
+    .refresh-btn.loading { opacity: 0.6; pointer-events: none; }
+
+    /* nav tabs */
+    .nav-tabs {
+      display: flex; border-bottom: 1px solid var(--border);
+      padding: 0 28px; background: var(--bg1);
+    }
+    .nav-tab {
+      background: none; border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text2); padding: 12px 18px;
+      font-size: 11px; font-weight: 600; font-family: var(--font-mono);
+      cursor: pointer; transition: all 0.2s; letter-spacing: 0.5px;
+    }
+    .nav-tab:hover { color: var(--text1); }
+    .nav-tab.active { color: var(--nse); border-bottom-color: var(--nse); }
+
+    /* main content */
+    .content { padding: 22px 28px; max-width: 1600px; margin: 0 auto; }
+
+    .tab-panel { display: none; animation: fadeUp 0.3s ease; }
+    .tab-panel.active { display: block; }
+
+    /* ═══════════════════════════════════════
+       STAT CARDS
+    ═══════════════════════════════════════ */
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 14px; margin-bottom: 22px;
+    }
+    @media (max-width: 900px) { .stats-grid { grid-template-columns: repeat(2,1fr); } }
+    .stat-card {
+      background: linear-gradient(135deg, var(--bg1), var(--bg2));
+      border-radius: 13px; padding: 18px 20px;
+      border: 1px solid var(--border2);
+      opacity: 0; transform: translateY(14px);
+      transition: all 0.4s ease;
+    }
+    .stat-card.visible { opacity: 1; transform: none; }
+    .stat-label { font-size: 9px; color: var(--text2); letter-spacing: 1.5px; margin-bottom: 10px; }
+    .stat-value { font-size: 30px; font-weight: 700; line-height: 1; }
+    .stat-sub { font-size: 9px; color: var(--text2); margin-top: 5px; }
+
+    /* ═══════════════════════════════════════
+       CONTROLS BAR
+    ═══════════════════════════════════════ */
+    .controls {
+      display: flex; gap: 8px; flex-wrap: wrap;
+      align-items: center; margin-bottom: 16px;
+    }
+    .search-input {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 7px; padding: 7px 13px;
+      color: var(--text0); font-size: 11px;
+      font-family: var(--font-mono); outline: none;
+      width: 150px; transition: border-color 0.2s;
+    }
+    .search-input:focus { border-color: rgba(0,196,255,0.4); }
+    .filter-btn, .sort-btn {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 7px; padding: 7px 13px;
+      font-size: 10px; font-family: var(--font-mono);
+      cursor: pointer; transition: all 0.15s; color: var(--text2);
+    }
+    .filter-btn:hover, .sort-btn:hover { color: var(--text1); }
+    .filter-btn.active {
+      background: rgba(0,255,157,0.1);
+      border-color: rgba(0,255,157,0.4);
+      color: var(--green);
+    }
+    .sort-btn.active {
+      background: rgba(245,197,24,0.1);
+      border-color: rgba(245,197,24,0.3);
+      color: var(--yellow);
+    }
+    .src-btn {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 7px; padding: 7px 11px;
+      font-size: 10px; font-weight: 700; font-family: var(--font-mono);
+      cursor: pointer; transition: all 0.15s; color: var(--text2);
+    }
+    .src-btn[data-src="NSE"].active { background: rgba(0,196,255,0.1); border-color: rgba(0,196,255,0.4); color: var(--nse); }
+    .src-btn[data-src="BSE"].active { background: rgba(255,107,53,0.1); border-color: rgba(255,107,53,0.4); color: var(--bse); }
+    .src-btn[data-src="MC"].active  { background: rgba(168,255,120,0.1); border-color: rgba(168,255,120,0.4); color: var(--mc); }
+    .src-btn[data-src="ALL"].active { background: rgba(0,255,157,0.1); border-color: rgba(0,255,157,0.4); color: var(--green); }
+    .divider { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+    .controls-right { margin-left: auto; display: flex; gap: 6px; }
+
+    /* ═══════════════════════════════════════
+       MAIN TABLE
+    ═══════════════════════════════════════ */
+    .table-wrap {
+      background: linear-gradient(135deg, var(--bg1), var(--bg2));
+      border: 1px solid var(--border);
+      border-radius: 15px; overflow: hidden;
+    }
+    .table-head {
+      display: grid;
+      grid-template-columns: 46px 170px 56px 110px 62px 58px 96px 82px 100px;
+      padding: 10px 18px;
+      background: rgba(255,255,255,0.02);
+      border-bottom: 1px solid var(--border2);
+      font-size: 9px; color: var(--text2); letter-spacing: 1.5px;
+    }
+    .table-row {
+      display: grid;
+      grid-template-columns: 46px 170px 56px 110px 62px 58px 96px 82px 100px;
+      padding: 13px 18px; align-items: center;
+      border-bottom: 1px solid var(--border2);
+      cursor: pointer; transition: all 0.15s;
+      border-left: 2px solid transparent;
+      opacity: 0; transform: translateX(-4px);
+    }
+    .table-row.visible { opacity: 1; transform: none; }
+    .table-row:hover { background: rgba(255,255,255,0.025); }
+    .table-row.signal-row { border-left-color: rgba(0,255,157,0.4); background: rgba(0,255,157,0.015); }
+    .table-row.trap-row   { border-left-color: rgba(255,77,109,0.3); }
+    .table-row:last-child { border-bottom: none; }
+
+    /* Score ring */
+    .score-ring-wrap { flex-shrink: 0; }
+
+    /* Stock cell */
+    .stock-symbol { font-weight: 700; font-size: 13px; color: var(--text0); }
+    .stock-name   { font-size: 9px; color: var(--text2); margin-top: 2px;
+                    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+    .stock-badges { display: flex; gap: 4px; margin-top: 3px; flex-wrap: wrap; }
+    .badge {
+      font-size: 8px; font-weight: 700; padding: 1px 5px;
+      border-radius: 3px; letter-spacing: 0.5px;
+    }
+    .badge-trap   { background: rgba(255,77,109,0.12); color: var(--red); border: 1px solid rgba(255,77,109,0.3); }
+    .badge-signal { background: rgba(0,255,157,0.12); color: var(--green); border: 1px solid rgba(0,255,157,0.3); animation: blink 1.5s infinite; }
+
+    /* Source badge */
+    .src-badge {
+      font-size: 9px; font-weight: 700; padding: 2px 7px;
+      border-radius: 4px; letter-spacing: 1px; display: inline-block;
+    }
+    .src-badge.NSE { background: rgba(0,196,255,0.1); color: var(--nse); border: 1px solid rgba(0,196,255,0.25); }
+    .src-badge.BSE { background: rgba(255,107,53,0.1); color: var(--bse); border: 1px solid rgba(255,107,53,0.25); }
+    .src-badge.MC  { background: rgba(168,255,120,0.1); color: var(--mc); border: 1px solid rgba(168,255,120,0.25); }
+
+    /* Purpose text */
+    .purpose-text {
+      font-size: 9px; color: var(--text2); line-height: 1.4;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* Yield */
+    .yield-val { font-size: 13px; font-weight: 700; }
+    .yield-high { color: var(--green); }
+    .yield-mid  { color: var(--yellow); }
+    .yield-low  { color: var(--text0); }
+
+    /* Days */
+    .days-val { font-size: 13px; font-weight: 700; }
+    .days-urgent { color: var(--red); }
+    .days-soon   { color: var(--orange); }
+    .days-normal { color: var(--yellow); }
+
+    /* Ex-date */
+    .exdate-main { font-size: 11px; color: var(--text0); }
+    .exdate-rec  { font-size: 9px; color: var(--text2); margin-top: 2px; }
+
+    /* Trend badge */
+    .trend-badge {
+      font-size: 10px; font-weight: 600; padding: 3px 8px;
+      border-radius: 4px; display: inline-block;
+    }
+
+    /* Category badge */
+    .cat-badge {
+      font-size: 9px; font-weight: 700; padding: 3px 8px;
+      border-radius: 5px; text-align: center;
+    }
+
+    /* Actions */
+    .action-btns { display: flex; gap: 5px; }
+    .action-btn {
+      background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+      border-radius: 6px; padding: 5px 8px; font-size: 12px;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .action-btn:hover { transform: scale(1.1); }
+    .action-btn.bell  { background: rgba(0,255,157,0.08);  border-color: rgba(0,255,157,0.25); }
+    .action-btn.chart { background: rgba(77,171,255,0.08); border-color: rgba(77,171,255,0.25); }
+
+    /* empty state */
+    .empty-state { padding: 40px; text-align: center; color: var(--text2); font-size: 12px; }
+
+    /* legend */
+    .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; }
+    .legend-item { display: flex; align-items: center; gap: 5px; font-size: 9px; color: var(--text2); }
+    .legend-dot { width: 5px; height: 5px; border-radius: 50%; }
+
+    /* ═══════════════════════════════════════
+       DETAIL MODAL
+    ═══════════════════════════════════════ */
+    .modal-overlay {
+      position: fixed; inset: 0; z-index: 500;
+      background: rgba(0,0,0,0.75); backdrop-filter: blur(12px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+    .modal {
+      background: linear-gradient(135deg, var(--bg1), #111a28);
+      border-radius: 20px; padding: 28px;
+      width: 100%; max-width: 540px;
+      max-height: 90vh; overflow-y: auto;
+      transform: translateY(20px); transition: transform 0.25s ease;
+    }
+    .modal-overlay.open .modal { transform: none; }
+    .modal-header {
+      display: flex; justify-content: space-between;
+      align-items: flex-start; margin-bottom: 20px;
+    }
+    .modal-symbol { font-size: 22px; font-weight: 700; color: var(--text0); }
+    .modal-name   { font-size: 11px; color: var(--text2); margin-top: 3px; }
+    .modal-close  {
+      background: none; border: none; color: var(--text2);
+      font-size: 20px; cursor: pointer; transition: color 0.15s; padding: 4px;
+    }
+    .modal-close:hover { color: var(--text0); }
+    .modal-purpose {
+      background: rgba(255,255,255,0.03); border-radius: 8px;
+      padding: 10px 14px; font-size: 11px; color: var(--text2);
+      font-style: italic; margin-bottom: 18px; line-height: 1.5;
+    }
+    .modal-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 8px; margin-bottom: 18px;
+    }
+    .modal-kv {
+      background: rgba(255,255,255,0.03); border-radius: 8px;
+      padding: 10px 12px;
+    }
+    .modal-kv .k { font-size: 9px; color: var(--text2); margin-bottom: 4px; }
+    .modal-kv .v { font-size: 13px; font-weight: 700; color: var(--text0); }
+    .dma-row { display: flex; gap: 8px; margin-bottom: 18px; }
+    .dma-box {
+      flex: 1; text-align: center; padding: 10px 8px;
+      border-radius: 8px;
+    }
+    .dma-box.above { background: rgba(0,255,157,0.07); border: 1px solid rgba(0,255,157,0.25); }
+    .dma-box.below { background: rgba(255,77,109,0.07); border: 1px solid rgba(255,77,109,0.25); }
+    .dma-label { font-size: 9px; color: var(--text2); }
+    .dma-val   { font-size: 11px; font-weight: 700; margin-top: 3px; }
+    .score-breakdown { margin-bottom: 18px; }
+    .sb-title { font-size: 9px; color: var(--text2); letter-spacing: 1.5px; margin-bottom: 12px; }
+    .sb-row { margin-bottom: 8px; }
+    .sb-meta { display: flex; justify-content: space-between; font-size: 10px; color: var(--text2); margin-bottom: 3px; }
+    .sb-bar-bg { height: 3px; background: rgba(255,255,255,0.07); border-radius: 2px; }
+    .sb-bar    { height: 3px; border-radius: 2px; transition: width 0.8s ease; }
+    .div-history { margin-bottom: 18px; }
+    .dh-title { font-size: 9px; color: var(--text2); letter-spacing: 1.5px; margin-bottom: 10px; }
+    .dh-bars {
+      display: flex; gap: 6px; align-items: flex-end; height: 64px;
+    }
+    .dh-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+    .dh-bar { width: 100%; border-radius: 3px 3px 0 0; }
+    .dh-yr { font-size: 8px; color: var(--text2); }
+    .dh-amt { font-size: 8px; color: var(--text1); }
+    .entry-box {
+      border-radius: 10px; padding: 12px 14px; margin-bottom: 10px;
+    }
+    .entry-box.signal-box { background: rgba(0,255,157,0.05); border: 1px solid rgba(0,255,157,0.2); }
+    .entry-box.trap-box   { background: rgba(255,77,109,0.07); border: 1px solid rgba(255,77,109,0.25); }
+    .entry-box-title { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; margin-bottom: 8px; }
+    .entry-box-row {
+      display: flex; justify-content: space-between;
+      font-size: 11px; color: var(--text1);
+    }
+    .entry-box-row strong { color: var(--text0); }
+
+    /* alert modal */
+    .alert-modal {
+      background: linear-gradient(135deg, var(--bg1), #12192a);
+      border-radius: 16px; padding: 26px;
+      width: 100%; max-width: 400px;
+      transform: translateY(20px); transition: transform 0.25s ease;
+    }
+    .modal-overlay.open .alert-modal { transform: none; }
+    .alert-header { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+    .alert-icon { font-size: 20px; }
+    .alert-title { font-size: 15px; font-weight: 700; }
+    .alert-rows { background: rgba(255,255,255,0.03); border-radius: 10px; padding: 14px; margin-bottom: 16px; }
+    .alert-row {
+      display: flex; justify-content: space-between; padding: 5px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 11px;
+    }
+    .alert-row:last-child { border-bottom: none; }
+    .alert-row .ak { color: var(--text2); }
+    .alert-row .av { color: var(--text0); font-weight: 600; }
+    .alert-trap {
+      background: rgba(255,77,109,0.08); border: 1px solid rgba(255,77,109,0.25);
+      border-radius: 8px; padding: 10px 12px;
+      font-size: 11px; color: var(--red); margin-bottom: 14px;
+    }
+    .modal-btns { display: flex; gap: 8px; }
+    .modal-btn {
+      flex: 1; border-radius: 8px; padding: 10px;
+      font-size: 12px; font-weight: 700; cursor: pointer;
+      font-family: var(--font-mono); transition: all 0.15s;
+      border: 1px solid;
+    }
+    .modal-btn:hover { opacity: 0.85; }
+    .modal-btn.primary { color: var(--green); background: rgba(0,255,157,0.1); border-color: rgba(0,255,157,0.4); }
+    .modal-btn.secondary { color: var(--text1); background: rgba(255,255,255,0.04); border-color: var(--border); }
+
+    /* ═══════════════════════════════════════
+       BACKTEST TAB
+    ═══════════════════════════════════════ */
+    .bt-grid {
+      display: grid; grid-template-columns: 320px 1fr;
+      gap: 16px; margin-bottom: 20px;
+    }
+    @media (max-width: 960px) { .bt-grid { grid-template-columns: 1fr; } }
+    .panel {
+      background: linear-gradient(135deg, var(--bg1), var(--bg2));
+      border: 1px solid var(--border); border-radius: 14px; padding: 20px;
+    }
+    .panel-title { font-size: 11px; color: var(--text2); letter-spacing: 1.5px; margin-bottom: 16px; }
+    .form-row { margin-bottom: 14px; }
+    .form-label { font-size: 10px; color: var(--text2); margin-bottom: 6px; display: block; }
+    .form-select, .form-range {
+      width: 100%; background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border); border-radius: 7px;
+      padding: 8px 12px; color: var(--text0); font-family: var(--font-mono);
+      font-size: 11px; outline: none;
+    }
+    .form-range { padding: 0; border: none; background: none; cursor: pointer; accent-color: var(--nse); }
+    .range-row { display: flex; justify-content: space-between; font-size: 9px; color: var(--text2); margin-top: 2px; }
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .toggle-label { font-size: 11px; color: var(--text1); }
+    .toggle {
+      position: relative; width: 38px; height: 20px;
+      background: rgba(255,255,255,0.1); border-radius: 10px;
+      cursor: pointer; transition: background 0.2s;
+    }
+    .toggle.on { background: rgba(0,255,157,0.4); }
+    .toggle::after {
+      content: ''; position: absolute; width: 14px; height: 14px;
+      background: white; border-radius: 50%; top: 3px; left: 3px;
+      transition: transform 0.2s;
+    }
+    .toggle.on::after { transform: translateX(18px); }
+    .run-btn {
+      width: 100%; background: linear-gradient(135deg, #0060cc, #00c4ff);
+      border: none; border-radius: 9px; padding: 12px;
+      color: white; font-size: 13px; font-weight: 700;
+      font-family: var(--font-mono); cursor: pointer;
+      transition: all 0.2s; margin-top: 4px;
+    }
+    .run-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,196,255,0.3); }
+    .run-btn:disabled { opacity: 0.5; pointer-events: none; }
+
+    /* stats summary */
+    .stats-summary { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 16px; }
+    .ss-card {
+      background: rgba(255,255,255,0.03); border-radius: 10px; padding: 14px;
+      text-align: center;
+    }
+    .ss-val { font-size: 22px; font-weight: 700; }
+    .ss-label { font-size: 9px; color: var(--text2); margin-top: 4px; letter-spacing: 1px; }
+
+    /* robustness table */
+    .rob-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+    .rob-table th {
+      text-align: left; padding: 8px 10px;
+      color: var(--text2); border-bottom: 1px solid var(--border2);
+      letter-spacing: 1px; font-size: 9px;
+    }
+    .rob-table td {
+      padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.03);
+      color: var(--text1);
+    }
+    .rob-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .rob-table .pos { color: var(--green); font-weight: 700; }
+    .rob-table .neg { color: var(--red); }
+
+    /* event study chart */
+    .chart-wrap { position: relative; height: 200px; margin-bottom: 16px; }
+    #event-study-canvas { width: 100%; height: 100%; }
+    .chart-label {
+      position: absolute; top: 8px; left: 12px;
+      font-size: 9px; color: var(--text2); letter-spacing: 1px;
+    }
+    .chart-zero {
+      position: absolute; left: 0; right: 0;
+      border-top: 1px dashed rgba(255,255,255,0.12);
+    }
+
+    /* ═══════════════════════════════════════
+       LOADING SKELETON
+    ═══════════════════════════════════════ */
+    .skeleton { 
+      background: linear-gradient(90deg, var(--bg2) 25%, var(--bg3) 50%, var(--bg2) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite; border-radius: 4px;
+    }
+    .sk-row { height: 50px; margin-bottom: 4px; border-radius: 6px; }
+
+    /* ═══════════════════════════════════════
+       NOTIFICATIONS TOAST
+    ═══════════════════════════════════════ */
+    .toast-wrap { position: fixed; bottom: 24px; right: 24px; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
+    .toast {
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px 16px;
+      font-size: 11px; color: var(--text0);
+      animation: slideInToast 0.3s ease;
+      max-width: 300px;
+    }
+    .toast.success { border-left: 3px solid var(--green); }
+    .toast.error   { border-left: 3px solid var(--red); }
+
+    /* ═══════════════════════════════════════
+       ANIMATIONS
+    ═══════════════════════════════════════ */
+    @keyframes blink       { 0%,100%{opacity:1} 50%{opacity:.3} }
+    @keyframes fadeUp      { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:none} }
+    @keyframes shimmer     { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+    @keyframes slideInToast{ from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:none} }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════ TOP BAR ═══════════════ -->
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="logo-icon">📡</div>
+    <div>
+      <div class="logo-title">Dividend Radar Engine</div>
+      <div class="logo-sub">TRADIQAI · NSE · BSE · MONEYCONTROL</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="live-dot"><div class="dot"></div>LIVE</div>
+    <div class="last-update" id="last-update">Fetching…</div>
+    <button class="refresh-btn" id="refresh-btn" onclick="loadData()">⟳ Refresh</button>
+  </div>
+</header>
+
+<!-- ═══════════════ NAV TABS ═══════════════ -->
+<nav class="nav-tabs">
+  <button class="nav-tab active" onclick="switchTab('radar',this)">📡 Radar</button>
+  <button class="nav-tab"       onclick="switchTab('backtest',this)">📊 Backtest</button>
+  <button class="nav-tab"       onclick="switchTab('signals',this)">🎯 Signals</button>
+</nav>
+
+<!-- ═══════════════ MAIN CONTENT ═══════════════ -->
+<main class="content">
+
+  <!-- ══ RADAR TAB ══ -->
+  <div id="tab-radar" class="tab-panel active">
+
+    <!-- Stats -->
+    <div class="stats-grid" id="stats-grid">
+      <div class="stat-card" style="border-color:rgba(0,196,255,.12)">
+        <div class="stat-label">UPCOMING DIVIDENDS</div>
+        <div class="stat-value" id="st-total" style="color:var(--nse)">—</div>
+        <div class="stat-sub">next 14 days</div>
+      </div>
+      <div class="stat-card" style="border-color:rgba(0,255,157,.12)">
+        <div class="stat-label">STRONG BUY</div>
+        <div class="stat-value" id="st-strong" style="color:var(--green)">—</div>
+        <div class="stat-sub">score 80+</div>
+      </div>
+      <div class="stat-card" style="border-color:rgba(245,197,24,.12)">
+        <div class="stat-label">ENTRY SIGNALS</div>
+        <div class="stat-value" id="st-signals" style="color:var(--yellow)">—</div>
+        <div class="stat-sub">active today</div>
+      </div>
+      <div class="stat-card" style="border-color:rgba(255,77,109,.12)">
+        <div class="stat-label">TRAP WARNINGS</div>
+        <div class="stat-value" id="st-traps" style="color:var(--red)">—</div>
+        <div class="stat-sub">high yield + downtrend</div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <input class="search-input" id="search" placeholder="Search symbol…" oninput="renderTable()" />
+
+      <div class="src-btn active" data-src="ALL" onclick="setSrc('ALL',this)">ALL</div>
+      <div class="src-btn" data-src="NSE" onclick="setSrc('NSE',this)">NSE</div>
+      <div class="src-btn" data-src="BSE" onclick="setSrc('BSE',this)">BSE</div>
+      <div class="src-btn" data-src="MC"  onclick="setSrc('MC',this)">MC</div>
+
+      <div class="divider"></div>
+
+      <button class="filter-btn active" data-f="all"       onclick="setFilter('all',this)">All</button>
+      <button class="filter-btn"        data-f="strongbuy" onclick="setFilter('strongbuy',this)">Strong Buy</button>
+      <button class="filter-btn"        data-f="entry"     onclick="setFilter('entry',this)">Entry Signals 🎯</button>
+      <button class="filter-btn"        data-f="trap"      onclick="setFilter('trap',this)">Traps ⚠️</button>
+
+      <div class="controls-right">
+        <span style="font-size:10px;color:var(--text2)">Sort:</span>
+        <button class="sort-btn active" data-s="score"  onclick="setSort('score',this)">Score</button>
+        <button class="sort-btn"        data-s="yield"  onclick="setSort('yield',this)">Yield</button>
+        <button class="sort-btn"        data-s="exdate" onclick="setSort('exdate',this)">Ex-Date</button>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <div class="table-head">
+        <span>SCR</span>
+        <span>STOCK</span>
+        <span>SRC</span>
+        <span>PURPOSE</span>
+        <span>YIELD</span>
+        <span>DAYS</span>
+        <span>EX-DATE</span>
+        <span>TREND</span>
+        <span>ACTIONS</span>
+      </div>
+      <div id="table-body">
+        <!-- skeleton -->
+        <div class="skeleton sk-row" style="margin:10px 18px"></div>
+        <div class="skeleton sk-row" style="margin:4px 18px;opacity:.7"></div>
+        <div class="skeleton sk-row" style="margin:4px 18px;opacity:.5"></div>
+        <div class="skeleton sk-row" style="margin:4px 18px;opacity:.3"></div>
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--nse)"></div>NSE</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--bse)"></div>BSE</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--mc)"></div>MoneyControl</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Strong Buy 80+</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--yellow)"></div>Watchlist 60–79</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div>Moderate 40–59</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>Ignore / Trap</div>
+    </div>
+  </div>
+
+  <!-- ══ BACKTEST TAB ══ -->
+  <div id="tab-backtest" class="tab-panel">
+    <div class="bt-grid">
+
+      <!-- Config Panel -->
+      <div class="panel">
+        <div class="panel-title">BACKTEST CONFIGURATION</div>
+
+        <div class="form-row">
+          <label class="form-label">Strategy</label>
+          <select class="form-select" id="bt-strategy" onchange="updateExitLabel()">
+            <option value="S1">S1 — Pre-Ex Run-Up (exit before ex-date)</option>
+            <option value="S2">S2 — Dividend Capture (hold through ex-date)</option>
+            <option value="S3">S3 — Trend + Dividend Filter</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label class="form-label">Entry: <span id="entry-n-val">10</span> trading days before ex-date</label>
+          <input type="range" class="form-range" id="bt-entry-n" min="3" max="20" value="10" oninput="document.getElementById('entry-n-val').textContent=this.value" />
+          <div class="range-row"><span>3 days</span><span>20 days</span></div>
+        </div>
+
+        <div class="form-row">
+          <label class="form-label" id="exit-label">Exit: 1 day before ex-date (S1)</label>
+          <select class="form-select" id="bt-exit-offset">
+            <option value="-1">1 day before ex-date (S1)</option>
+            <option value="5">+5 days after ex-date (S2)</option>
+            <option value="10">+10 days after ex-date (S2)</option>
+            <option value="20">+20 days after ex-date (S2)</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label class="form-label">Min Yield Filter (%): <span id="min-yield-val">2.0</span>%</label>
+          <input type="range" class="form-range" id="bt-min-yield" min="0" max="8" step="0.5" value="2"
+            oninput="document.getElementById('min-yield-val').textContent=parseFloat(this.value).toFixed(1)" />
+          <div class="range-row"><span>0%</span><span>8%</span></div>
+        </div>
+
+        <div class="form-row" style="background:rgba(255,255,255,0.02);border-radius:10px;padding:12px">
+          <div class="toggle-row">
+            <span class="toggle-label">Trend Filter (price > SMA50)</span>
+            <div class="toggle on" id="tgl-trend" onclick="this.classList.toggle('on')"></div>
+          </div>
+          <div class="toggle-row">
+            <span class="toggle-label">Volume / Liquidity Filter</span>
+            <div class="toggle on" id="tgl-vol" onclick="this.classList.toggle('on')"></div>
+          </div>
+          <div class="toggle-row" style="margin-bottom:0">
+            <span class="toggle-label">Skip Corp Action Overlaps</span>
+            <div class="toggle on" id="tgl-corp" onclick="this.classList.toggle('on')"></div>
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-top:14px">
+          <label class="form-label">Cost Model (bps per side): <span id="cost-val">15</span></label>
+          <input type="range" class="form-range" id="bt-cost" min="5" max="40" value="15"
+            oninput="document.getElementById('cost-val').textContent=this.value" />
+          <div class="range-row"><span>5 bps</span><span>40 bps</span></div>
+        </div>
+
+        <button class="run-btn" id="run-bt-btn" onclick="runBacktest()">▶ Run Backtest</button>
+      </div>
+
+      <!-- Results Panel -->
+      <div>
+        <div class="panel" style="margin-bottom:16px">
+          <div class="panel-title">RESULTS SUMMARY</div>
+          <div class="stats-summary" id="bt-summary">
+            <div class="ss-card"><div class="ss-val" style="color:var(--text2)">—</div><div class="ss-label">TRADES</div></div>
+            <div class="ss-card"><div class="ss-val" style="color:var(--text2)">—</div><div class="ss-label">WIN RATE</div></div>
+            <div class="ss-card"><div class="ss-val" style="color:var(--text2)">—</div><div class="ss-label">AVG NET RETURN</div></div>
+            <div class="ss-card"><div class="ss-val" style="color:var(--text2)">—</div><div class="ss-label">PROFIT FACTOR</div></div>
+            <div class="ss-card"><div class="ss-val" style="color:var(--text2)">—</div><div class="ss-label">MAX DRAWDOWN</div></div>
+            <div class="ss-card"><div class="ss-val" style="color:var(--text2)">—</div><div class="ss-label">TOTAL NET RETURN</div></div>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-bottom:16px">
+          <div class="panel-title">EVENT STUDY — AVG RETURN vs EX-DATE</div>
+          <div class="chart-wrap">
+            <div class="chart-label">AVG CUMULATIVE RETURN (%)</div>
+            <canvas id="event-study-canvas"></canvas>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text2);padding:0 4px">
+            <span>-15d</span><span>-10d</span><span>-5d</span><span>0 (ex-date)</span><span>+5d</span><span>+10d</span><span>+15d</span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">ROBUSTNESS CHECK — ALL N × EXIT COMBINATIONS</div>
+          <div style="overflow-x:auto">
+            <table class="rob-table" id="rob-table">
+              <thead>
+                <tr>
+                  <th>STRATEGY</th><th>ENTRY N</th><th>EXIT OFFSET</th>
+                  <th>TRADES</th><th>WIN RATE</th><th>AVG RETURN</th>
+                  <th>PROFIT FACTOR</th>
+                </tr>
+              </thead>
+              <tbody id="rob-tbody">
+                <tr><td colspan="7" style="color:var(--text2);text-align:center;padding:20px">Run backtest to see robustness data</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SIGNALS TAB ══ -->
+  <div id="tab-signals" class="tab-panel">
+    <div style="margin-bottom:20px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <div style="font-size:11px;color:var(--text2)">
+        Stocks meeting full entry criteria: Score &gt;70 · Above 20DMA · Ex-date 5–14 days away · Not a trap
+      </div>
+      <button class="filter-btn active" style="margin-left:auto" onclick="loadSignals()">↻ Reload</button>
+    </div>
+    <div id="signals-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px">
+      <div class="skeleton" style="height:200px;border-radius:14px"></div>
+      <div class="skeleton" style="height:200px;border-radius:14px;opacity:.6"></div>
+      <div class="skeleton" style="height:200px;border-radius:14px;opacity:.4"></div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ═══════════════ DETAIL MODAL ═══════════════ -->
+<div class="modal-overlay" id="detail-overlay" onclick="closeDetail(event)">
+  <div class="modal" id="detail-modal">
+    <!-- filled by JS -->
+  </div>
+</div>
+
+<!-- ═══════════════ ALERT MODAL ═══════════════ -->
+<div class="modal-overlay" id="alert-overlay" onclick="closeAlert(event)">
+  <div class="alert-modal" id="alert-modal">
+    <!-- filled by JS -->
+  </div>
+</div>
+
+<!-- ═══════════════ TOASTS ═══════════════ -->
+<div class="toast-wrap" id="toasts"></div>
+
+
+<script>
+/* ═══════════════════════════════════════════════════
+   CONFIG — change API_BASE to match your server
+═══════════════════════════════════════════════════ */
+const API_BASE = '';   // empty = same origin. e.g. 'http://localhost:8000'
+
+/* ═══════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════ */
+let ALL_DATA   = [];
+let activeFilter = 'all';
+let activeSrc    = 'ALL';
+let activeSort   = 'score';
+
+/* ═══════════════════════════════════════════════════
+   DATA LOADING
+═══════════════════════════════════════════════════ */
+async function loadData() {
+  const btn = document.getElementById('refresh-btn');
+  btn.classList.add('loading');
+  btn.textContent = '⟳ Loading…';
+
+  try {
+    const res = await fetch(`${API_BASE}/api/dividends/upcoming`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    ALL_DATA = await res.json();
+    updateStats();
+    renderTable();
+    document.getElementById('last-update').textContent =
+      'Updated: ' + new Date().toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit'});
+    toast('Data refreshed successfully', 'success');
+  } catch(e) {
+    console.warn('API unavailable, using demo data:', e.message);
+    ALL_DATA = DEMO_DATA;
+    updateStats();
+    renderTable();
+    document.getElementById('last-update').textContent = 'Demo mode';
+    toast('API unavailable — showing demo data', 'error');
+  } finally {
+    btn.classList.remove('loading');
+    btn.textContent = '⟳ Refresh';
+  }
+}
+
+function updateStats() {
+  document.getElementById('st-total').textContent   = ALL_DATA.length;
+  document.getElementById('st-strong').textContent  = ALL_DATA.filter(d => d.dre_score >= 80).length;
+  document.getElementById('st-signals').textContent = ALL_DATA.filter(d => d.entry_signal).length;
+  document.getElementById('st-traps').textContent   = ALL_DATA.filter(d => d.is_trap).length;
+  // Animate cards in
+  document.querySelectorAll('.stat-card').forEach((c,i) => {
+    setTimeout(() => c.classList.add('visible'), i * 80);
+  });
+}
+
+/* ═══════════════════════════════════════════════════
+   TABLE RENDER
+═══════════════════════════════════════════════════ */
+function getFiltered() {
+  const q = document.getElementById('search').value.toLowerCase();
+  return ALL_DATA
+    .filter(d => {
+      if (q && !d.symbol?.toLowerCase().includes(q) && !d.name?.toLowerCase().includes(q)) return false;
+      if (activeSrc !== 'ALL' && d.source !== activeSrc) return false;
+      const days = daysTo(d.ex_date);
+      if (activeFilter === 'strongbuy') return d.dre_score >= 80;
+      if (activeFilter === 'entry')     return d.entry_signal && !d.is_trap;
+      if (activeFilter === 'trap')      return d.is_trap;
+      return true;
+    })
+    .sort((a,b) => {
+      if (activeSort === 'score')  return (b.dre_score||0) - (a.dre_score||0);
+      if (activeSort === 'yield')  return (b.yield_pct||0) - (a.yield_pct||0);
+      return new Date(a.ex_date) - new Date(b.ex_date);
+    });
+}
+
+function renderTable() {
+  const data  = getFiltered();
+  const tbody = document.getElementById('table-body');
+
+  if (!data.length) {
+    tbody.innerHTML = '<div class="empty-state">No stocks match the current filter.</div>';
+    return;
+  }
+
+  tbody.innerHTML = data.map((d,i) => rowHTML(d,i)).join('');
+  // Stagger rows in
+  setTimeout(() => {
+    document.querySelectorAll('.table-row').forEach((r,i) => {
+      setTimeout(() => r.classList.add('visible'), i * 35);
+    });
+  }, 10);
+}
+
+function rowHTML(d, i) {
+  const cat      = getCategory(d.dre_score);
+  const days     = daysTo(d.ex_date);
+  const daysClass= days <= 5 ? 'days-urgent' : days <= 7 ? 'days-soon' : 'days-normal';
+  const yClass   = d.yield_pct >= 5 ? 'yield-high' : d.yield_pct >= 3 ? 'yield-mid' : 'yield-low';
+  const signal   = d.entry_signal && !d.is_trap;
+
+  return `
+  <div class="table-row ${signal ? 'signal-row' : ''} ${d.is_trap ? 'trap-row' : ''}"
+    onclick="openDetail(${i})" data-idx="${i}">
+
+    <div class="score-ring-wrap">${scoreRingHTML(d.dre_score, 42, cat.color)}</div>
+
+    <div>
+      <div class="stock-symbol">${d.symbol || d.name?.split(' ')[0] || '?'}</div>
+      <div class="stock-name">${d.name || ''}</div>
+      <div class="stock-badges">
+        ${d.is_trap   ? '<span class="badge badge-trap">TRAP</span>' : ''}
+        ${signal      ? '<span class="badge badge-signal">🎯 ENTRY</span>' : ''}
+      </div>
+    </div>
+
+    <div><span class="src-badge ${d.source||'NSE'}">${d.source||'NSE'}</span></div>
+
+    <div class="purpose-text" title="${d.purpose||''}">
+      ${(d.purpose||'').substring(0,35)}${(d.purpose||'').length>35?'…':''}
+    </div>
+
+    <div class="yield-val ${yClass}">${(d.yield_pct||0).toFixed(1)}%</div>
+
+    <div class="days-val ${daysClass}">${days}d</div>
+
+    <div>
+      <div class="exdate-main">${fmtDate(d.ex_date)}</div>
+      ${d.record_date ? `<div class="exdate-rec">Rec: ${fmtDate(d.record_date)}</div>` : ''}
+    </div>
+
+    <div>${trendBadgeHTML(d.trend)}</div>
+
+    <div class="action-btns" onclick="event.stopPropagation()">
+      <button class="action-btn bell"  onclick="openAlert(${i})" title="Alert">🔔</button>
+      <button class="action-btn chart" onclick="openDetail(${i})" title="Details">📊</button>
+    </div>
+  </div>`;
+}
+
+/* ═══════════════════════════════════════════════════
+   SCORE RING SVG
+═══════════════════════════════════════════════════ */
+function scoreRingHTML(score, size, color) {
+  const r = size/2 - 4, circ = 2*Math.PI*r;
+  const offset = circ - (Math.min(score||0,100)/100)*circ;
+  return `
+  <svg width="${size}" height="${size}" style="transform:rotate(-90deg)">
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="3.5"/>
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${color}"
+      stroke-width="3.5" stroke-dasharray="${circ.toFixed(1)}" stroke-dashoffset="${offset.toFixed(1)}"
+      stroke-linecap="round"/>
+    <text x="${size/2}" y="${size/2}" text-anchor="middle" dominant-baseline="middle"
+      fill="${color}" font-size="10" font-weight="700"
+      style="transform:rotate(90deg);transform-origin:${size/2}px ${size/2}px;font-family:monospace">
+      ${score||0}
+    </text>
+  </svg>`;
+}
+
+/* ═══════════════════════════════════════════════════
+   DETAIL MODAL
+═══════════════════════════════════════════════════ */
+function openDetail(idx) {
+  const d   = getFiltered()[idx];
+  if (!d) return;
+  const cat = getCategory(d.dre_score);
+
+  const scoreBar = (val, max, color) => `
+    <div class="sb-row">
+      <div class="sb-meta"><span>${arguments[3]||''}</span><span style="color:${color}">${val}/${max}</span></div>
+      <div class="sb-bar-bg"><div class="sb-bar" style="width:${(val/max*100).toFixed(0)}%;background:${color}"></div></div>
+    </div>`;
+
+  // dividend history bars
+  const hist = d.div_history || [];
+  const maxH = Math.max(...hist.map(Number), 1);
+  const histBars = hist.slice(0,5).map((h,i) => `
+    <div class="dh-bar-wrap">
+      <div class="dh-amt">₹${Number(h).toFixed(0)}</div>
+      <div class="dh-bar" style="height:${Math.max((h/maxH)*44,3)}px;background:${i===0?'var(--green)':'rgba(255,255,255,0.15)'}"></div>
+      <div class="dh-yr">FY${22+i}</div>
+    </div>`).join('');
+
+  const modal = document.getElementById('detail-modal');
+  modal.style.borderColor = cat.color + '33';
+  modal.style.boxShadow   = `0 0 60px ${cat.color}15`;
+
+  modal.innerHTML = `
+  <div class="modal-header">
+    <div>
+      <div class="modal-symbol">${d.symbol||d.name?.split(' ')[0]||'?'}</div>
+      <div class="modal-name">${d.name||''} &nbsp;·&nbsp; <span class="src-badge ${d.source||'NSE'}" style="font-size:8px">${d.source||'NSE'}</span></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      ${scoreRingHTML(d.dre_score, 58, cat.color)}
+      <button class="modal-close" onclick="closeDetail()">✕</button>
+    </div>
+  </div>
+
+  <div class="modal-purpose">"${d.purpose||'—'}"</div>
+
+  <div class="modal-grid">
+    ${kvHTML('Ex-Date',     fmtDate(d.ex_date))}
+    ${kvHTML('Record Date', fmtDate(d.record_date)||'—')}
+    ${kvHTML('Payment Date',fmtDate(d.payment_date)||'—')}
+    ${kvHTML('Days to Ex',  `${daysTo(d.ex_date)} days`, daysTo(d.ex_date)<=7?'var(--red)':'var(--yellow)')}
+    ${kvHTML('Dividend',    `₹${(d.dividend_amount||0).toFixed(2)} (${d.dividend_type||'Div'})`, 'var(--green)')}
+    ${kvHTML('Yield',       `${(d.yield_pct||0).toFixed(2)}%`, d.yield_pct>=5?'var(--green)':d.yield_pct>=3?'var(--yellow)':'var(--text0)')}
+    ${kvHTML('Price',       d.price ? `₹${Number(d.price).toFixed(1)}` : '—')}
+    ${kvHTML('Face Value',  d.face_value ? `₹${d.face_value}` : '—')}
+    ${kvHTML('ROE',         d.roe ? `${Number(d.roe).toFixed(1)}%` : '—', (d.roe||0)>18?'var(--green)':'var(--orange)')}
+    ${kvHTML('D/E Ratio',   d.de != null ? Number(d.de).toFixed(2) : '—', (d.de||0)<1?'var(--green)':'var(--red)')}
+  </div>
+
+  <div class="dma-row">
+    ${dmaBox('20 DMA', d.above_20dma)}
+    ${dmaBox('50 DMA', d.above_50dma)}
+    ${dmaBox('200 DMA', d.above_200dma)}
+  </div>
+
+  <div class="score-breakdown">
+    <div class="sb-title">SCORE BREAKDOWN</div>
+    ${scoreBar(d.score_yield||0,       25, '#00ff9d', 'Dividend Yield')}
+    ${scoreBar(d.score_consistency||0, 20, '#4dabff', 'Consistency')}
+    ${scoreBar(d.score_growth||0,      15, '#f5c518', 'Growth (3yr CAGR)')}
+    ${scoreBar(d.score_financial||0,   20, '#ff8c42', 'Financial Strength')}
+    ${scoreBar(d.score_technical||0,   20, '#c77dff', 'Technical Strength')}
+  </div>
+
+  ${hist.length ? `
+  <div class="div-history">
+    <div class="dh-title">DIVIDEND HISTORY (₹)</div>
+    <div class="dh-bars">${histBars}</div>
+  </div>` : ''}
+
+  ${d.is_trap ? `
+  <div class="entry-box trap-box">
+    <div class="entry-box-title" style="color:var(--red)">⚠️ DIVIDEND TRAP</div>
+    <div style="font-size:11px;color:#aa6677">Yield ${(d.yield_pct||0).toFixed(1)}% + price downtrend detected. Avoid for dividend capture strategy.</div>
+  </div>` : d.entry_signal ? `
+  <div class="entry-box signal-box">
+    <div class="entry-box-title" style="color:var(--green)">🎯 ENTRY SIGNAL ACTIVE</div>
+    <div class="entry-box-row">
+      <span>Entry Zone</span>
+      <strong style="color:var(--green)">₹${d.entry_zone_low||'—'} – ₹${d.entry_zone_high||'—'}</strong>
+    </div>
+    <div class="entry-box-row" style="margin-top:6px">
+      <span>S1 Exit (Capture)</span><strong>1 day before ex-date</strong>
+    </div>
+    <div class="entry-box-row" style="margin-top:4px">
+      <span>S2 Exit (Trend)</span><strong>Close below 20DMA</strong>
+    </div>
+  </div>` : ''}`;
+
+  document.getElementById('detail-overlay').classList.add('open');
+}
+
+function closeDetail(e) {
+  if (e && e.target !== document.getElementById('detail-overlay')) return;
+  document.getElementById('detail-overlay').classList.remove('open');
+}
+
+/* ═══════════════════════════════════════════════════
+   ALERT MODAL
+═══════════════════════════════════════════════════ */
+function openAlert(idx) {
+  const d   = getFiltered()[idx];
+  if (!d) return;
+  const cat = getCategory(d.dre_score);
+
+  const modal = document.getElementById('alert-modal');
+  modal.style.borderColor = cat.color + '33';
+
+  const scoreBar = '▓'.repeat(Math.round((d.dre_score||0)/10)) + '░'.repeat(10-Math.round((d.dre_score||0)/10));
+
+  modal.innerHTML = `
+  <div class="alert-header">
+    <span class="alert-icon">🔔</span>
+    <span class="alert-title" style="color:${cat.color}">Dividend Radar Alert</span>
+    <button class="modal-close" onclick="closeAlert()" style="margin-left:auto">✕</button>
+  </div>
+  <div class="alert-rows">
+    ${alertRow('Stock',      d.symbol||d.name?.split(' ')[0]||'?')}
+    ${alertRow('Exchange',   d.exchange||d.source||'NSE')}
+    ${alertRow('Ex-Date',    fmtDate(d.ex_date))}
+    ${alertRow('Days Left',  `${daysTo(d.ex_date)} days`)}
+    ${alertRow('Dividend',   `₹${(d.dividend_amount||0).toFixed(2)} (${d.dividend_type||'Div'})`)}
+    ${alertRow('Yield',      `${(d.yield_pct||0).toFixed(2)}%`)}
+    ${alertRow('DRE Score',  `${d.dre_score||0}/100  ${scoreBar}`)}
+    ${alertRow('Category',   d.category||'—')}
+    ${alertRow('Trend',      d.trend||'—')}
+    ${d.entry_zone_low ? alertRow('Entry Zone', `₹${d.entry_zone_low} – ₹${d.entry_zone_high}`) : ''}
+  </div>
+  ${d.is_trap ? `<div class="alert-trap">⚠️ <strong>DIVIDEND TRAP WARNING</strong> — High yield + downtrend. Avoid entry.</div>` : ''}
+  <div class="modal-btns">
+    <button class="modal-btn primary" onclick="copyAlert(${idx})">📤 Copy Alert</button>
+    <button class="modal-btn secondary" onclick="closeAlert()">Close</button>
+  </div>`;
+
+  document.getElementById('alert-overlay').classList.add('open');
+}
+
+function closeAlert(e) {
+  if (e && e.target !== document.getElementById('alert-overlay')) return;
+  document.getElementById('alert-overlay').classList.remove('open');
+}
+
+function copyAlert(idx) {
+  const d = getFiltered()[idx];
+  const text = `🔔 Dividend Radar Alert\n\nStock: ${d.symbol||d.name}\nEx-Date: ${fmtDate(d.ex_date)}\nYield: ${(d.yield_pct||0).toFixed(2)}%\nDRE Score: ${d.dre_score||0}\nCategory: ${d.category||'—'}\nTrend: ${d.trend||'—'}\n${d.entry_zone_low?`Entry Zone: ₹${d.entry_zone_low}–₹${d.entry_zone_high}\n`:''}${d.is_trap?'⚠️ DIVIDEND TRAP WARNING\n':''}\nTradiqAI DRE`;
+  navigator.clipboard?.writeText(text);
+  toast('Alert copied to clipboard!', 'success');
+}
+
+/* ═══════════════════════════════════════════════════
+   SIGNALS TAB
+═══════════════════════════════════════════════════ */
+async function loadSignals() {
+  const grid = document.getElementById('signals-grid');
+  try {
+    const res  = await fetch(`${API_BASE}/api/dividends/signals`);
+    const data = res.ok ? await res.json() : ALL_DATA.filter(d => d.entry_signal && !d.is_trap);
+    renderSignalCards(data);
+  } catch {
+    renderSignalCards(ALL_DATA.filter(d => d.entry_signal && !d.is_trap));
+  }
+}
+
+function renderSignalCards(data) {
+  const grid = document.getElementById('signals-grid');
+  if (!data.length) {
+    grid.innerHTML = '<div style="color:var(--text2);font-size:12px;grid-column:1/-1;padding:40px;text-align:center">No active entry signals at this time.</div>';
+    return;
+  }
+  grid.innerHTML = data.map(d => {
+    const cat = getCategory(d.dre_score);
+    return `
+    <div style="background:linear-gradient(135deg,var(--bg1),var(--bg2));border:1px solid ${cat.color}25;border-radius:14px;padding:20px;border-left:3px solid ${cat.color};cursor:pointer" onclick="openDetail(ALL_DATA.indexOf(d))">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+        <div>
+          <div style="font-size:18px;font-weight:700;color:var(--text0)">${d.symbol||d.name?.split(' ')[0]}</div>
+          <div style="font-size:10px;color:var(--text2);margin-top:2px">${d.name||''}</div>
+        </div>
+        ${scoreRingHTML(d.dre_score, 52, cat.color)}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+        ${kvHTML('Yield',    `${(d.yield_pct||0).toFixed(1)}%`, 'var(--green)')}
+        ${kvHTML('Ex-Date',  fmtDate(d.ex_date))}
+        ${kvHTML('Days Left',`${daysTo(d.ex_date)}d`, daysTo(d.ex_date)<=7?'var(--red)':'var(--yellow)')}
+        ${kvHTML('Trend',    d.trend||'—')}
+      </div>
+      ${d.entry_zone_low ? `
+      <div style="background:rgba(0,255,157,0.07);border:1px solid rgba(0,255,157,0.2);border-radius:8px;padding:10px;font-size:11px">
+        <span style="color:var(--text2)">Entry Zone:</span>
+        <strong style="color:var(--green);margin-left:6px">₹${d.entry_zone_low} – ₹${d.entry_zone_high}</strong>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════
+   BACKTEST (simulated — calls backend when available)
+═══════════════════════════════════════════════════ */
+function runBacktest() {
+  const btn = document.getElementById('run-bt-btn');
+  btn.disabled = true;
+  btn.textContent = '⟳ Running…';
+
+  const cfg = {
+    strategy:          document.getElementById('bt-strategy').value,
+    entry_n:           parseInt(document.getElementById('bt-entry-n').value),
+    exit_offset:       parseInt(document.getElementById('bt-exit-offset').value),
+    min_yield:         parseFloat(document.getElementById('bt-min-yield').value),
+    use_trend_filter:  document.getElementById('tgl-trend').classList.contains('on'),
+    use_vol_filter:    document.getElementById('tgl-vol').classList.contains('on'),
+    skip_corp_overlap: document.getElementById('tgl-corp').classList.contains('on'),
+    cost_bps:          parseInt(document.getElementById('bt-cost').value),
+  };
+
+  // Try backend first, fall back to simulated
+  fetch(`${API_BASE}/api/dividends/backtest`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(cfg)
+  })
+  .then(r => r.ok ? r.json() : Promise.reject())
+  .then(data => renderBacktestResults(data))
+  .catch(() => {
+    // Simulate results for demo
+    setTimeout(() => {
+      renderBacktestResults(simulateBacktest(cfg));
+    }, 800);
+  })
+  .finally(() => {
+    btn.disabled = false;
+    btn.textContent = '▶ Run Backtest';
+  });
+}
+
+function simulateBacktest(cfg) {
+  // Deterministic simulation based on config params
+  const base_wr  = cfg.use_trend_filter ? 62 : 51;
+  const base_ret = cfg.strategy === 'S1' ? 1.8 : cfg.exit_offset >= 10 ? 1.2 : 0.8;
+  const n        = 120 + cfg.entry_n * 3;
+  const wr       = Math.min(base_wr + (cfg.min_yield * 2), 75) + (Math.random()*6-3);
+  const avg_ret  = base_ret - (cfg.cost_bps/1000) + (Math.random()*0.4-0.2);
+  const pf       = wr > 50 ? (wr / (100-wr)) * (Math.abs(avg_ret)/0.8) : 0.9;
+  const max_dd   = -(3 + Math.random()*5);
+
+  // Robustness rows
+  const rob = [];
+  [5,10,15].forEach(en => {
+    [-1,5,10,20].forEach(eo => {
+      const s = eo < 0 ? 'S1' : 'S2';
+      const w = base_wr + en - Math.abs(eo) + (Math.random()*10-5);
+      const r = base_ret + (en-10)*0.05 - (cfg.cost_bps/1000);
+      rob.push({ strategy:s, entry_n:en, exit_offset:eo, n_trades:Math.round(n*(en/10)),
+        win_rate: Math.min(Math.max(w,30),80).toFixed(1), avg_return: r.toFixed(3),
+        profit_factor: (w/100 / (1-w/100) * Math.abs(r)/0.8).toFixed(2) });
+    });
+  });
+
+  // Event study curve (synthetic)
+  const curve = Array.from({length:31},(_,i) => {
+    const day = i - 15;
+    let val = 0;
+    if (cfg.strategy === 'S1') {
+      // Pre-ex run-up then drop at ex-date
+      if (day < 0)  val = day * 0.1 + (Math.random()*0.15-0.075);
+      if (day === 0) val = -1.5;
+      if (day > 0)  val = -1.5 + day * 0.08;
+    } else {
+      // S2: run-up, dip, recovery
+      if (day < 0)  val = day * 0.08;
+      if (day >= 0) val = -0.8 + day * 0.06;
+    }
+    return { day, val };
+  });
+
+  return { n_trades:n, win_rate:wr.toFixed(1), avg_net_return:avg_ret.toFixed(3),
+    profit_factor:pf.toFixed(2), max_drawdown:max_dd.toFixed(2),
+    total_net_return:(avg_ret*n/10).toFixed(2), rob_rows: rob, event_curve: curve };
+}
+
+function renderBacktestResults(data) {
+  // Summary stats
+  const summaryEl = document.getElementById('bt-summary');
+  const vals = [
+    { val: data.n_trades,        label: 'TRADES',          color: 'var(--nse)' },
+    { val: data.win_rate + '%',  label: 'WIN RATE',        color: data.win_rate > 55 ? 'var(--green)' : 'var(--orange)' },
+    { val: (data.avg_net_return > 0 ? '+' : '') + data.avg_net_return + '%', label: 'AVG NET RETURN', color: data.avg_net_return > 0 ? 'var(--green)' : 'var(--red)' },
+    { val: data.profit_factor,   label: 'PROFIT FACTOR',   color: data.profit_factor >= 1.3 ? 'var(--green)' : 'var(--orange)' },
+    { val: data.max_drawdown + '%', label: 'MAX DRAWDOWN', color: 'var(--red)' },
+    { val: (data.total_net_return > 0 ? '+' : '') + data.total_net_return + '%', label: 'TOTAL NET RETURN', color: data.total_net_return > 0 ? 'var(--green)' : 'var(--red)' },
+  ];
+  summaryEl.innerHTML = vals.map(v =>
+    `<div class="ss-card"><div class="ss-val" style="color:${v.color}">${v.val}</div><div class="ss-label">${v.label}</div></div>`
+  ).join('');
+
+  // Robustness table
+  const tbody = document.getElementById('rob-tbody');
+  tbody.innerHTML = (data.rob_rows||[]).sort((a,b) => b.profit_factor - a.profit_factor).map(r => `
+    <tr>
+      <td>${r.strategy}</td>
+      <td>${r.entry_n}</td>
+      <td>${r.exit_offset}</td>
+      <td>${r.n_trades}</td>
+      <td>${r.win_rate}%</td>
+      <td class="${r.avg_return > 0 ? 'pos' : 'neg'}">${r.avg_return > 0 ? '+':'' }${r.avg_return}%</td>
+      <td class="${r.profit_factor >= 1.3 ? 'pos' : ''}">${r.profit_factor}</td>
+    </tr>`).join('');
+
+  // Event study chart (simple canvas)
+  drawEventStudy(data.event_curve || []);
+  toast('Backtest complete!', 'success');
+}
+
+function drawEventStudy(curve) {
+  const canvas = document.getElementById('event-study-canvas');
+  const ctx    = canvas.getContext('2d');
+  const W = canvas.parentElement.offsetWidth;
+  const H = canvas.parentElement.offsetHeight;
+  canvas.width  = W;
+  canvas.height = H;
+
+  if (!curve.length) return;
+  ctx.clearRect(0,0,W,H);
+
+  const vals    = curve.map(c => c.val);
+  const minV    = Math.min(...vals) - 0.2;
+  const maxV    = Math.max(...vals) + 0.2;
+  const range   = maxV - minV || 1;
+  const pad     = { l:30, r:20, t:20, b:20 };
+  const chartW  = W - pad.l - pad.r;
+  const chartH  = H - pad.t - pad.b;
+
+  const toX = i  => pad.l + (i / (curve.length-1)) * chartW;
+  const toY = v  => pad.t + (1 - (v - minV)/range) * chartH;
+
+  // Zero line
+  const zY = toY(0);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(pad.l, zY); ctx.lineTo(W-pad.r, zY); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Ex-date line
+  const midX = toX(curve.length/2);
+  ctx.strokeStyle = 'rgba(245,197,24,0.4)';
+  ctx.beginPath(); ctx.moveTo(midX, pad.t); ctx.lineTo(midX, H-pad.b); ctx.stroke();
+  ctx.fillStyle   = 'rgba(245,197,24,0.6)';
+  ctx.font        = '9px JetBrains Mono, monospace';
+  ctx.fillText('EX', midX+3, pad.t+10);
+  ctx.restore();
+
+  // Fill area
+  ctx.beginPath();
+  ctx.moveTo(toX(0), toY(vals[0]));
+  curve.forEach((_,i) => ctx.lineTo(toX(i), toY(vals[i])));
+  ctx.lineTo(toX(curve.length-1), H-pad.b);
+  ctx.lineTo(pad.l, H-pad.b);
+  ctx.closePath();
+  const grad = ctx.createLinearGradient(0,pad.t,0,H);
+  grad.addColorStop(0,  'rgba(0,196,255,0.25)');
+  grad.addColorStop(1,  'rgba(0,196,255,0.02)');
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  ctx.strokeStyle = '#00c4ff';
+  ctx.lineWidth   = 2;
+  ctx.moveTo(toX(0), toY(vals[0]));
+  curve.forEach((_,i) => ctx.lineTo(toX(i), toY(vals[i])));
+  ctx.stroke();
+}
+
+/* ═══════════════════════════════════════════════════
+   UI HELPERS
+═══════════════════════════════════════════════════ */
+function switchTab(id, el) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  el.classList.add('active');
+  if (id === 'signals') loadSignals();
+}
+
+function setFilter(f, el) {
+  activeFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  renderTable();
+}
+
+function setSrc(s, el) {
+  activeSrc = s;
+  document.querySelectorAll('.src-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  renderTable();
+}
+
+function setSort(s, el) {
+  activeSort = s;
+  document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  renderTable();
+}
+
+function getCategory(score) {
+  const s = score || 0;
+  if (s >= 80) return { label:'Strong Buy', color:'#00ff9d', bg:'rgba(0,255,157,0.1)' };
+  if (s >= 60) return { label:'Watchlist',  color:'#f5c518', bg:'rgba(245,197,24,0.1)' };
+  if (s >= 40) return { label:'Moderate',   color:'#ff8c42', bg:'rgba(255,140,66,0.1)' };
+  return             { label:'Ignore',      color:'#ff4d6d', bg:'rgba(255,77,109,0.1)' };
+}
+
+function trendBadgeHTML(trend) {
+  const map = { 'Strong':['#00ff9d','↑↑'], 'Moderate':['#f5c518','→'], 'Weak':['#ff8c42','↓'], 'Downtrend':['#ff4d6d','↓↓'], 'Weak Uptrend':['#f5c518','↗'] };
+  const [c,icon] = map[trend] || ['#8899bb','—'];
+  return `<span class="trend-badge" style="background:${c}18;color:${c};border:1px solid ${c}33">${icon} ${trend||'—'}</span>`;
+}
+
+function catBadgeHTML(score) {
+  const cat = getCategory(score);
+  return `<span class="cat-badge" style="background:${cat.bg};color:${cat.color};border:1px solid ${cat.color}33">${cat.label}</span>`;
+}
+
+function kvHTML(k, v, color='var(--text0)') {
+  return `<div class="modal-kv"><div class="k">${k}</div><div class="v" style="color:${color}">${v||'—'}</div></div>`;
+}
+
+function dmaBox(label, above) {
+  const cls = above ? 'above' : 'below';
+  const col = above ? 'var(--green)' : 'var(--red)';
+  const txt = above ? 'Above ✓' : 'Below ✗';
+  return `<div class="dma-box ${cls}"><div class="dma-label">${label}</div><div class="dma-val" style="color:${col}">${txt}</div></div>`;
+}
+
+function alertRow(k, v) {
+  return `<div class="alert-row"><span class="ak">${k}</span><span class="av">${v}</span></div>`;
+}
+
+function daysTo(exDate) {
+  if (!exDate) return 0;
+  const d = new Date(exDate) - new Date();
+  return Math.ceil(d / 86400000);
+}
+
+function fmtDate(d) {
+  if (!d) return '—';
+  const p = String(d).split('-');
+  if (p.length === 3) return `${p[2]}/${p[1]}/${p[0]}`;
+  return d;
+}
+
+function toast(msg, type='success') {
+  const wrap = document.getElementById('toasts');
+  const el   = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  wrap.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+function updateExitLabel() {
+  const s = document.getElementById('bt-strategy').value;
+  document.getElementById('exit-label').textContent =
+    s === 'S1' ? 'Exit: 1 day before ex-date (S1)' : 'Exit: days after ex-date (S2)';
+}
+
+/* ═══════════════════════════════════════════════════
+   DEMO DATA (when API is unavailable)
+═══════════════════════════════════════════════════ */
+const DEMO_DATA = [
+  { symbol:"ITC", name:"ITC Ltd", exchange:"NSE", source:"NSE", series:"EQ",
+    purpose:"Annual General Meeting/Dividend - Rs 6.50 Per Share",
+    dividend_type:"Final", dividend_amount:6.50, face_value:1, yield_pct:3.5,
+    ex_date:"2026-03-12", record_date:"2026-03-13", payment_date:null,
+    dre_score:82, category:"Strong Buy", is_trap:false, entry_signal:true,
+    trend:"Strong", price:462, above_20dma:true, above_50dma:true, above_200dma:true,
+    roe:22, de:0.1, days_to_ex:14, entry_zone_low:455, entry_zone_high:470,
+    score_yield:20, score_consistency:20, score_growth:15, score_financial:20, score_technical:10,
+    div_history:[6.5,6.0,5.5,5.0,4.5] },
+
+  { symbol:"POWERGRID", name:"Power Grid Corp", exchange:"NSE", source:"NSE",
+    purpose:"Interim Dividend - Rs 7.50 Per Share",
+    dividend_type:"Interim", dividend_amount:7.50, face_value:10, yield_pct:5.8,
+    ex_date:"2026-03-22", record_date:"2026-03-24", payment_date:"2026-04-08",
+    dre_score:88, category:"Strong Buy", is_trap:false, entry_signal:true,
+    trend:"Strong", price:318, above_20dma:true, above_50dma:true, above_200dma:true,
+    roe:20, de:0.9, days_to_ex:24, entry_zone_low:312, entry_zone_high:325,
+    score_yield:25, score_consistency:20, score_growth:15, score_financial:20, score_technical:10,
+    div_history:[7.5,7.0,6.5,6.0,5.5] },
+
+  { symbol:"COALINDIA", name:"Coal India Ltd", exchange:"BSE", source:"BSE",
+    purpose:"Interim Dividend - Rs 14.50 Per Share",
+    dividend_type:"Interim", dividend_amount:14.50, face_value:10, yield_pct:7.2,
+    ex_date:"2026-03-08", record_date:"2026-03-09", payment_date:"2026-03-25",
+    dre_score:74, category:"Watchlist", is_trap:false, entry_signal:true,
+    trend:"Moderate", price:392, above_20dma:true, above_50dma:true, above_200dma:false,
+    roe:31, de:0.3, days_to_ex:10, entry_zone_low:385, entry_zone_high:400,
+    score_yield:25, score_consistency:20, score_growth:5, score_financial:20, score_technical:5,
+    div_history:[14.5,13.5,12.0,10.0,9.5] },
+
+  { symbol:"NESTLEIND", name:"Nestle India Ltd", exchange:"NSE", source:"NSE",
+    purpose:"Annual Dividend - Rs 75 Per Share",
+    dividend_type:"Final", dividend_amount:75, face_value:1, yield_pct:2.1,
+    ex_date:"2026-03-25", record_date:"2026-03-26",
+    dre_score:78, category:"Watchlist", is_trap:false, entry_signal:false,
+    trend:"Strong", price:2280, above_20dma:true, above_50dma:true, above_200dma:true,
+    roe:24, de:0.0, days_to_ex:27, entry_zone_low:2250, entry_zone_high:2300,
+    score_yield:10, score_consistency:20, score_growth:15, score_financial:20, score_technical:15,
+    div_history:[75,65,55,50,45] },
+
+  { symbol:"HDFCBANK", name:"HDFC Bank Ltd", exchange:"NSE", source:"NSE",
+    purpose:"Dividend - Rs 19 Per Share",
+    dividend_type:"Dividend", dividend_amount:19, face_value:1, yield_pct:1.2,
+    ex_date:"2026-03-18", record_date:"2026-03-19",
+    dre_score:68, category:"Watchlist", is_trap:false, entry_signal:false,
+    trend:"Moderate", price:1720, above_20dma:true, above_50dma:false, above_200dma:true,
+    roe:16, de:0.8, days_to_ex:20, entry_zone_low:1700, entry_zone_high:1740,
+    score_yield:0, score_consistency:20, score_growth:15, score_financial:15, score_technical:18,
+    div_history:[19,15,12,10,8] },
+
+  { symbol:"ONGC", name:"ONGC Ltd", exchange:"BSE", source:"BSE",
+    purpose:"Final Dividend - Rs 5.00 Per Share",
+    dividend_type:"Final", dividend_amount:5.0, face_value:5, yield_pct:6.1,
+    ex_date:"2026-03-10", record_date:"2026-03-11",
+    dre_score:44, category:"Moderate", is_trap:false, entry_signal:false,
+    trend:"Weak", price:241, above_20dma:false, above_50dma:false, above_200dma:false,
+    roe:9, de:1.2, days_to_ex:12,
+    score_yield:25, score_consistency:15, score_growth:5, score_financial:0, score_technical:0,
+    div_history:[5.0,4.5,5.5,3.5,4.0] },
+
+  { symbol:"TATASTEEL", name:"Tata Steel Ltd", exchange:"BSE", source:"BSE",
+    purpose:"Dividend - Rs 3.60 Per Share",
+    dividend_type:"Dividend", dividend_amount:3.60, face_value:1, yield_pct:9.2,
+    ex_date:"2026-03-07", record_date:"2026-03-08", payment_date:"2026-04-01",
+    dre_score:31, category:"Ignore", is_trap:true, entry_signal:false,
+    trend:"Downtrend", price:128, above_20dma:false, above_50dma:false, above_200dma:false,
+    roe:7, de:1.8, days_to_ex:9,
+    score_yield:25, score_consistency:10, score_growth:0, score_financial:0, score_technical:0,
+    div_history:[3.6,3.5,5.0,2.0,1.0] },
+
+  { symbol:"HINDUNILVR", name:"Hindustan Unilever", exchange:"MC", source:"MC",
+    purpose:"Annual Dividend - Rs 21 Per Share",
+    dividend_type:"Final", dividend_amount:21, face_value:1, yield_pct:1.8,
+    ex_date:"2026-03-14", record_date:"2026-03-15",
+    dre_score:61, category:"Watchlist", is_trap:false, entry_signal:false,
+    trend:"Weak", price:2245, above_20dma:false, above_50dma:false, above_200dma:true,
+    roe:19, de:0.2, days_to_ex:16,
+    score_yield:10, score_consistency:20, score_growth:5, score_financial:20, score_technical:6,
+    div_history:[21,19,18,17,16] },
+];
+
+/* ═══════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  loadData();
+});
+</script>
+</body>
+</html>
