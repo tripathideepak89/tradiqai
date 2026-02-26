@@ -225,17 +225,28 @@ class DividendRadarScheduler:
             logger.error("DRE: Cannot run — no DB connection.")
             return []
 
-        # ── Step 1 & 2: Ingest ──────────────────
+        # ── Step 1 & 2: Ingest (upsert any new records) ─────────────
         ingestion_svc = DividendIngestionService(conn, window_days=14)
         ingestion_svc.ensure_table()
-        dividend_records = ingestion_svc.run_full_ingestion()
+        fetched = ingestion_svc.run_full_ingestion()
+        if fetched:
+            logger.info(f"DRE: {len(fetched)} new dividend records upserted.")
+        else:
+            logger.warning(
+                "DRE: External sources returned 0 records (NSE/BSE may be blocked). "
+                "Rescoring existing DB records with fresh prices."
+            )
+
+        # Always read ALL upcoming dividends from DB so existing records
+        # get rescored with fresh Kite price data even when ingestion returns 0.
+        dividend_records = ingestion_svc.get_upcoming_dividends()
 
         if not dividend_records:
-            logger.warning("DRE: No dividend records found for next 14 days.")
-            self.alerter.send("📡 DRE: No dividend records found for next 14 days.")
+            logger.warning("DRE: No upcoming dividends in DB for next 14 days.")
+            self.alerter.send("📡 DRE: No upcoming dividends in DB for next 14 days.")
             return []
 
-        logger.info(f"DRE: {len(dividend_records)} dividend records ingested.")
+        logger.info(f"DRE: Scoring {len(dividend_records)} upcoming dividends from DB.")
 
         # ── Step 3 & 4: Score ───────────────────
         scoring_engine = DividendScoringEngine(conn)
