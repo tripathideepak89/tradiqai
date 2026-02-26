@@ -132,11 +132,28 @@ def _now_utc() -> str:
 
 NSE_HOME        = "https://www.nseindia.com"
 NSE_ACTIONS_URL = "https://www.nseindia.com/api/corporates-corporateActions"
-NSE_HEADERS     = {
+
+# Browser headers for the HTML pages (homepage + CA page)
+# Accept must be text/html — sending application/json on HTML pages triggers 403.
+NSE_BROWSE_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
+        "Chrome/122.0.0.0 Safari/537.36"
+    ),
+    "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection":      "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+}
+
+# XHR headers for the JSON API endpoint
+NSE_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.0.0 Safari/537.36"
     ),
     "Accept":          "application/json, text/plain, */*",
     "Accept-Language": "en-US,en;q=0.9",
@@ -164,10 +181,11 @@ class NSEFetcher:
 
         logger.info("NSE: initialising new session…")
         s = requests.Session()
-        s.headers.update(NSE_HEADERS)
+        # Use HTML headers for page requests so NSE doesn't 403 us
+        s.headers.update(NSE_BROWSE_HEADERS)
 
         try:
-            # Step 1 — hit homepage to get base cookies
+            # Step 1 — hit homepage to get base cookies (must use HTML Accept)
             r = s.get(NSE_HOME, timeout=15)
             r.raise_for_status()
             time.sleep(1.5)
@@ -179,6 +197,9 @@ class NSEFetcher:
             )
             r.raise_for_status()
             time.sleep(1.0)
+
+            # Switch to XHR headers for API calls
+            s.headers.update(NSE_HEADERS)
 
             self.session      = s
             self.session_time = time.time()
