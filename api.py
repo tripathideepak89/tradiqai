@@ -29,11 +29,14 @@ def get_db():
     finally:
         db.close()
 
-# Raw psycopg2 connection for DRE routes (which use .cursor() API)
+# Raw psycopg connection for DRE routes (which use .cursor() API)
 def get_raw_db():
-    import psycopg2
     import os
-    conn = psycopg2.connect(os.environ.get("DATABASE_URL", ""))
+    try:
+        import psycopg2 as _pg  # type: ignore[import]
+    except ImportError:
+        import psycopg as _pg  # psycopg v3
+    conn = _pg.connect(os.environ.get("DATABASE_URL", ""))
     try:
         yield conn
     finally:

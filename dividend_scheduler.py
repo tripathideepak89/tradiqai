@@ -27,7 +27,12 @@ import logging
 import textwrap
 from datetime import datetime
 
-import psycopg2
+try:
+    import psycopg2  # type: ignore[import]
+    _psycopg = psycopg2
+except ImportError:
+    import psycopg as psycopg2  # psycopg v3 (installed as psycopg[binary])
+    _psycopg = psycopg2
 import requests
 
 # Import DRE modules (same directory)

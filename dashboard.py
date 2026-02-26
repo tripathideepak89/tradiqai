@@ -65,6 +65,37 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI
 app = FastAPI(title="TradiqAI Dashboard")
 
+# ── Dividend Radar Engine (DRE) ─────────────────────────────────
+def _get_dre_db():
+    """Raw psycopg connection for DRE routes (cursor API)."""
+    try:
+        import psycopg2 as _pg  # type: ignore[import]
+    except ImportError:
+        import psycopg as _pg  # psycopg v3 (installed as psycopg[binary])
+    conn = _pg.connect(os.environ.get("DATABASE_URL", ""))
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+try:
+    from dividend_scheduler import register_dre_routes
+    register_dre_routes(app, _get_dre_db)
+    logger.info("✅ DRE API routes registered")
+except Exception as _dre_err:
+    logger.warning(f"⚠️ DRE routes not loaded: {_dre_err}")
+
+@app.get("/dividend-radar")
+async def dividend_radar_page():
+    """Serve the Dividend Radar Engine dashboard."""
+    try:
+        with open("templates/dividend_radar.html", "r", encoding="utf-8") as f:
+            html = f.read()
+        return HTMLResponse(content=html)
+    except FileNotFoundError:
+        return HTMLResponse("<h2>Dividend Radar template not found.</h2>", status_code=404)
+# ────────────────────────────────────────────────────────────────
+
 # Quote cache (symbol -> {data, timestamp})
 quote_cache = {}
 QUOTE_CACHE_TTL = 30  # seconds
@@ -356,7 +387,16 @@ async def startup_event():
     if broker_sync_task is None:
         broker_sync_task = asyncio.create_task(broker_sync_loop())
         logger.info("✅ Broker sync task started (5min market hours, 1hr otherwise)")
-    
+
+    # Start DRE background scheduler (runs at 6:30 AM IST daily)
+    try:
+        from dividend_scheduler import DividendRadarScheduler
+        _dre = DividendRadarScheduler()
+        _dre.start_background()
+        logger.info("✅ DRE background scheduler started (6:30 AM IST daily)")
+    except Exception as _e:
+        logger.warning(f"⚠️ DRE scheduler not started: {_e}")
+
     logger.info("✅ Dashboard startup complete")
 
 
