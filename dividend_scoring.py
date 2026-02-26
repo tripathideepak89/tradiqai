@@ -61,8 +61,8 @@ SCORE_CONFIG = {
 
 # ─────────────────────────────────────────────
 #  PRICE DATA FETCHER
-#  Uses yfinance — already common in trading stacks.
-#  Fallback: returns None gracefully.
+#  Primary: Zerodha Kite Connect (server-IP friendly, requires KITE_ACCESS_TOKEN)
+#  Fallback: yfinance (Yahoo Finance)
 # ─────────────────────────────────────────────
 
 def _fetch_price_data(symbol: str) -> Optional[dict]:
@@ -71,9 +71,21 @@ def _fetch_price_data(symbol: str) -> Optional[dict]:
     Returns dict with keys: price, sma20, sma50, sma200, above_20dma, above_50dma, above_200dma
     or None on failure.
 
-    NSE suffix: symbol + ".NS"   e.g. "ITC.NS"
-    BSE suffix: symbol + ".BO"   e.g. "500875.BO"
+    Tries Kite Connect first (reliable from server IPs), falls back to yfinance.
+    NSE suffix for yfinance: symbol + ".NS"   e.g. "ITC.NS"
     """
+    # ── Primary: Zerodha Kite Connect ──────────────────────────────
+    try:
+        from kite_client import get_kite
+        kite = get_kite()
+        result = kite.fetch_price_data(symbol)
+        if result:
+            logger.debug(f"Kite price data: {symbol} ₹{result['price']:.2f}")
+            return result
+    except Exception as exc:
+        logger.debug(f"Kite price fetch skipped for {symbol}: {exc}")
+
+    # ── Fallback: yfinance ──────────────────────────────────────────
     try:
         import yfinance as yf
         ticker = f"{symbol}.NS"
@@ -89,14 +101,14 @@ def _fetch_price_data(symbol: str) -> Optional[dict]:
         sma200 = float(close.tail(200).mean()) if len(close) >= 200 else None
 
         return {
-            "price":       price,
-            "sma20":       sma20,
-            "sma50":       sma50,
-            "sma200":      sma200,
-            "above_20dma": price > sma20,
-            "above_50dma": price > sma50,
+            "price":        price,
+            "sma20":        sma20,
+            "sma50":        sma50,
+            "sma200":       sma200,
+            "above_20dma":  price > sma20,
+            "above_50dma":  price > sma50,
             "above_200dma": (price > sma200) if sma200 else False,
-            "5d_high":     float(close.tail(5).max()),
+            "5d_high":      float(close.tail(5).max()),
         }
 
     except ImportError:

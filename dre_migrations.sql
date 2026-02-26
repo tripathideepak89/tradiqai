@@ -101,7 +101,17 @@ CREATE INDEX IF NOT EXISTS idx_scores_score    ON dividend_scores(dre_score DESC
 
 
 -- ──────────────────────────────────────────
---  TABLE 3: Backtest results
+--  TABLE 3: App key-value settings
+--  Stores runtime config such as Kite access_token
+-- ──────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS app_settings (
+    key         TEXT PRIMARY KEY,
+    value       TEXT NOT NULL,
+    updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ──────────────────────────────────────────
+--  TABLE 4: Backtest results
 --  (written by DividendBacktester.export_to_db)
 -- ──────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS dividend_backtest_trades (

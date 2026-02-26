@@ -422,6 +422,113 @@ class MoneyControlFetcher:
 
 
 # ─────────────────────────────────────────────
+#  SOURCE 4: NSE ARCHIVES CSV  (SERVER-IP SAFE)
+#  Static file server — not blocked by NSE's
+#  cookie-gating on the main API.
+# ─────────────────────────────────────────────
+
+NSE_ARCHIVE_CA_URL = (
+    "https://archives.nseindia.com/content/equities/CA_full.csv"
+)
+NSE_ARCHIVE_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Referer": "https://www.nseindia.com/",
+}
+
+
+class NSEArchiveFetcher:
+    """
+    Downloads NSE's static corporate-actions CSV.
+    Accessible from server IPs where the main NSE API is blocked.
+    Filtered to dividend events only.
+    """
+
+    def fetch(self, from_date: str, to_date: str) -> list[dict]:
+        """
+        Args:
+            from_date: YYYY-MM-DD
+            to_date:   YYYY-MM-DD
+
+        Returns:
+            List of normalised dicts (unified schema).
+        """
+        try:
+            resp = requests.get(
+                NSE_ARCHIVE_CA_URL,
+                headers=NSE_ARCHIVE_HEADERS,
+                timeout=30,
+            )
+            resp.raise_for_status()
+        except Exception as exc:
+            logger.warning(f"NSE Archive fetch error: {exc}")
+            return []
+
+        import csv, io
+        results = []
+        try:
+            reader = csv.DictReader(io.StringIO(resp.text))
+            for row in reader:
+                # Normalise column names (NSE CSV headers vary by version)
+                row = {k.strip().upper(): v.strip() for k, v in row.items()}
+
+                purpose = row.get("PURPOSE", row.get("SUBJECT", ""))
+                if not purpose:
+                    continue
+                pu = purpose.upper()
+                if "DIVIDEND" not in pu and "DIV" not in pu:
+                    continue
+
+                # ex-date
+                raw_ex = (
+                    row.get("EX DATE", "")
+                    or row.get("EX-DATE", "")
+                    or row.get("EXDATE", "")
+                )
+                ex_date = _parse_date(raw_ex)
+                if not ex_date:
+                    continue
+
+                # Filter to requested window
+                if not (from_date <= ex_date <= to_date):
+                    continue
+
+                symbol = row.get("SYMBOL", "")
+                results.append({
+                    "symbol":            symbol,
+                    "bse_code":          None,
+                    "name":              row.get("COMPANY NAME", row.get("COMPANY", symbol)),
+                    "series":            row.get("SERIES", "EQ"),
+                    "exchange":          "NSE",
+                    "purpose":           purpose,
+                    "dividend_type":     _parse_dividend_type(purpose),
+                    "dividend_amount":   _parse_dividend_amount(purpose),
+                    "face_value":        None,
+                    "ex_date":           ex_date,
+                    "record_date":       _parse_date(
+                        row.get("RECORD DATE", row.get("RECORD-DATE", ""))
+                    ),
+                    "bc_start_date":     _parse_date(row.get("BC START DATE", "")),
+                    "bc_end_date":       _parse_date(row.get("BC END DATE", "")),
+                    "nd_start_date":     None,
+                    "nd_end_date":       None,
+                    "payment_date":      None,
+                    "announcement_date": None,
+                    "source":            "NSE",
+                    "ingested_at":       _now_utc(),
+                })
+
+            logger.info(f"NSE Archive: {len(results)} dividend records in window.")
+        except Exception as exc:
+            logger.error(f"NSE Archive parse error: {exc}")
+
+        return results
+
+
+# ─────────────────────────────────────────────
 #  MERGE + DEDUPLICATION
 # ─────────────────────────────────────────────
 
@@ -568,6 +675,7 @@ class DividendIngestionService:
         self.conn        = db_conn
         self.window_days = window_days
         self.nse         = NSEFetcher()
+        self.nse_archive = NSEArchiveFetcher()
         self.bse         = BSEFetcher()
         self.mc          = MoneyControlFetcher()
 
@@ -603,13 +711,21 @@ class DividendIngestionService:
 
         logger.info(f"DRE Ingestion: {nse_from} → {nse_to}")
 
+        today_str = today.strftime("%Y-%m-%d")
+        end_str   = end.strftime("%Y-%m-%d")
+
+        # Primary: NSE live API (needs browser session; may fail on server IPs)
         nse_data = self.nse.fetch(nse_from, nse_to)
+
+        # Secondary: NSE static archive CSV (server-IP safe fallback)
+        if not nse_data:
+            logger.info("NSE live API returned 0 records — trying NSE Archive CSV...")
+            nse_data = self.nse_archive.fetch(today_str, end_str)
+
         bse_data = self.bse.fetch(bse_from, bse_to)
         mc_data  = self.mc.fetch()   # MC doesn't support date params; filter post-fetch
 
         # Filter MC to window
-        today_str = today.strftime("%Y-%m-%d")
-        end_str   = end.strftime("%Y-%m-%d")
         mc_data = [
             r for r in mc_data
             if r.get("ex_date") and today_str <= r["ex_date"] <= end_str

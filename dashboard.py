@@ -94,7 +94,90 @@ async def dividend_radar_page():
         return HTMLResponse(content=html)
     except FileNotFoundError:
         return HTMLResponse("<h2>Dividend Radar template not found.</h2>", status_code=404)
-# ────────────────────────────────────────────────────────────────
+
+# ── Zerodha Kite Connect OAuth ───────────────────────────────────────
+@app.get("/api/kite/auth")
+async def kite_auth():
+    """Redirect to Zerodha login to start OAuth flow."""
+    try:
+        from kite_client import get_kite
+        kite = get_kite()
+        if not kite.api_key:
+            return JSONResponse(
+                {"error": "KITE_API_KEY not set in Railway environment"},
+                status_code=503,
+            )
+        return HTMLResponse(
+            f'<html><head><meta http-equiv="refresh" content="0;url={kite.login_url}"></head>'
+            f'<body>Redirecting to Zerodha Kite login...</body></html>'
+        )
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+@app.get("/api/kite/callback")
+async def kite_callback(request_token: str = None, status: str = None, message: str = None):
+    """
+    Zerodha redirects here after login.
+    Exchanges request_token → access_token, stores in Supabase.
+    """
+    if status != "success" or not request_token:
+        return HTMLResponse(
+            f"<h2>Kite login failed</h2><p>{message or 'Unknown error'}</p>",
+            status_code=400,
+        )
+    try:
+        from kite_client import get_kite, save_token_to_db
+        kite  = get_kite()
+        token = kite.generate_session(request_token)
+
+        # Persist token to Supabase so it survives scheduler restarts
+        try:
+            db_gen = _get_dre_db()
+            conn   = next(db_gen)
+            save_token_to_db(conn, token)
+            try:
+                next(db_gen)
+            except StopIteration:
+                pass
+        except Exception as _db_err:
+            logger.warning(f"Kite token DB save failed: {_db_err}")
+
+        return HTMLResponse(f"""
+        <html><body style="font-family:monospace;background:#0d1117;color:#e6edf3;padding:40px">
+          <h2>✅ Kite Connected</h2>
+          <p>Access token stored in Supabase.</p>
+          <p>Also add this to <strong>Railway → Variables</strong> for persistence across restarts:</p>
+          <pre style="background:#161b22;padding:16px;border-radius:8px">KITE_ACCESS_TOKEN={token}</pre>
+          <p><a href="/dividend-radar" style="color:#00c4ff">→ Open Dividend Radar</a></p>
+        </body></html>
+        """)
+    except Exception as exc:
+        logger.error(f"Kite callback error: {exc}")
+        return HTMLResponse(f"<h2>Error: {exc}</h2>", status_code=500)
+
+
+@app.get("/api/kite/status")
+async def kite_status():
+    """Check if Kite is connected and token is valid."""
+    try:
+        from kite_client import get_kite
+        kite = get_kite()
+        if not kite.is_configured:
+            return JSONResponse({"connected": False, "reason": "KITE_API_KEY or KITE_ACCESS_TOKEN not set"})
+        # Quick ping — fetch profile
+        resp = kite._session.get(
+            "https://api.kite.trade/user/profile",
+            headers=kite._auth(),
+            timeout=5,
+        )
+        if resp.status_code == 200:
+            name = resp.json().get("data", {}).get("user_name", "")
+            return JSONResponse({"connected": True, "user": name})
+        return JSONResponse({"connected": False, "reason": f"HTTP {resp.status_code}"})
+    except Exception as exc:
+        return JSONResponse({"connected": False, "reason": str(exc)})
+# ────────────────────────────────────────────────────────────────────
 
 # Quote cache (symbol -> {data, timestamp})
 quote_cache = {}
@@ -396,6 +479,19 @@ async def startup_event():
         logger.info("✅ DRE background scheduler started (6:30 AM IST daily)")
     except Exception as _e:
         logger.warning(f"⚠️ DRE scheduler not started: {_e}")
+
+    # Load Kite access_token from Supabase (if previously stored via /api/kite/callback)
+    try:
+        from kite_client import load_token_from_db
+        _db_gen = _get_dre_db()
+        _conn   = next(_db_gen)
+        load_token_from_db(_conn)
+        try:
+            next(_db_gen)
+        except StopIteration:
+            pass
+    except Exception as _ke:
+        logger.debug(f"Kite token not pre-loaded: {_ke}")
 
     logger.info("✅ Dashboard startup complete")
 
