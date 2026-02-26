@@ -46,3 +46,8 @@ click==8.1.7
 
 # Backtesting
 backtrader==1.9.78.123
+
+# DRE
+yfinance>=0.2.36
+apscheduler>=3.10.4
+beautifulsoup4>=4.12.0

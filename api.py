@@ -6,16 +6,22 @@ from typing import List, Dict
 from datetime import date, datetime
 from pydantic import BaseModel
 
+
 from database import SessionLocal
 from models import Trade, DailyMetrics, SystemLog
 from risk_engine import RiskEngine
 from monitoring import MonitoringService
+# DRE integration
+from dividend_scheduler import register_dre_routes
 
 app = FastAPI(
     title="AutoTrade AI API",
     description="API for monitoring and controlling the trading system",
     version="1.0.0"
 )
+
+# Register DRE API endpoints
+register_dre_routes(app, get_db)
 
 # Dependency
 def get_db():

@@ -23,6 +23,7 @@ from news_ingestion_layer import get_news_ingestion_layer, NewsIngestionLayer
 from news_impact_detector import NewsImpactDetector, NewsAction
 from news_governance import NewsGovernance
 from news_intelligence import NewsIntelligenceEngine
+from dividend_scheduler import DividendRadarScheduler
 
 # Custom formatter with IST timezone
 class ISTFormatter(logging.Formatter):
@@ -63,12 +64,15 @@ class TradingSystem:
         self.monitoring: MonitoringService = None
         self.strategies: List = []
         self.is_running = False
-        
+
         # News system components
         self.news_ingestion: NewsIngestionLayer = None
         self.news_detector: NewsImpactDetector = None
         self.news_governance: NewsGovernance = None
         self.news_intelligence: NewsIntelligenceEngine = None
+
+        # DRE Scheduler
+        self.dre_scheduler = None
     
     async def initialize(self) -> bool:
         """Initialize all components"""
@@ -165,6 +169,16 @@ class TradingSystem:
         except Exception as e:
             logger.error(f"Initialization failed: {e}")
             return False
+
+    def start_dre_scheduler(self):
+        """Start the Dividend Radar Engine background scheduler."""
+        try:
+            from dividend_scheduler import DividendRadarScheduler
+            self.dre_scheduler = DividendRadarScheduler()
+            self.dre_scheduler.start_background()
+            logger.info("[OK] DRE background scheduler started (6:30 AM IST)")
+        except Exception as e:
+            logger.error(f"Failed to start DRE scheduler: {e}")
     
     async def start(self) -> None:
         """Start the trading system"""
@@ -174,7 +188,10 @@ class TradingSystem:
                 return
             
             self.is_running = True
-            
+
+            # Start DRE scheduler (background)
+            self.start_dre_scheduler()
+
             # Start background tasks
             tasks = [
                 asyncio.create_task(self.trading_loop()),
@@ -183,11 +200,11 @@ class TradingSystem:
                 asyncio.create_task(self.monitoring.start_monitoring()),
                 asyncio.create_task(self.news_processing_loop())  # NEW: News processing
             ]
-            
+
             # Start news ingestion (separate task)
             news_task = asyncio.create_task(self.news_ingestion.start_polling())
             tasks.append(news_task)
-            
+
             # Wait for all tasks
             await asyncio.gather(*tasks)
             
