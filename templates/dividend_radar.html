@@ -514,6 +514,63 @@
     @keyframes fadeUp      { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:none} }
     @keyframes shimmer     { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
     @keyframes slideInToast{ from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:none} }
+
+    /* ═══════════════════════════════════════
+       TRADE MODAL
+    ═══════════════════════════════════════ */
+    .trade-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7); z-index: 500;
+      align-items: center; justify-content: center;
+    }
+    .trade-overlay.open { display: flex; }
+    .trade-modal {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 16px; padding: 28px; width: 360px;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.5);
+    }
+    .trade-modal h3 { font-size: 16px; font-weight: 700; margin-bottom: 18px; color: var(--text0); }
+    .trade-field { margin-bottom: 14px; }
+    .trade-field label { display: block; font-size: 10px; color: var(--text2); letter-spacing: 1px; margin-bottom: 5px; }
+    .trade-field input, .trade-field select {
+      width: 100%; background: var(--bg3); border: 1px solid var(--border2);
+      border-radius: 8px; padding: 9px 12px; color: var(--text0);
+      font-size: 13px; outline: none;
+    }
+    .trade-field input:focus, .trade-field select:focus { border-color: var(--nse); }
+    .trade-field input[readonly] { opacity: 0.6; cursor: default; }
+    .trade-action-row { display: flex; gap: 10px; margin-top: 20px; }
+    .btn-trade-buy {
+      flex: 1; padding: 11px; border: none; border-radius: 9px;
+      background: #10b981; color: white; font-size: 13px; font-weight: 700;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .btn-trade-buy:hover { background: #059669; }
+    .btn-trade-sell {
+      flex: 1; padding: 11px; border: none; border-radius: 9px;
+      background: #ef4444; color: white; font-size: 13px; font-weight: 700;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .btn-trade-sell:hover { background: #dc2626; }
+    .btn-trade-cancel {
+      padding: 11px 16px; border: 1px solid var(--border2); border-radius: 9px;
+      background: transparent; color: var(--text2); font-size: 13px;
+      cursor: pointer; transition: border-color 0.15s;
+    }
+    .btn-trade-cancel:hover { border-color: var(--text1); color: var(--text0); }
+    .trade-status { margin-top: 12px; font-size: 12px; text-align: center; min-height: 18px; }
+    .trade-status.ok  { color: var(--green); }
+    .trade-status.err { color: var(--red); }
+
+    /* row buy/sell buttons */
+    .btn-row-buy, .btn-row-sell {
+      padding: 4px 8px; border: none; border-radius: 5px;
+      font-size: 10px; font-weight: 700; cursor: pointer;
+      letter-spacing: 0.5px; transition: opacity 0.15s;
+    }
+    .btn-row-buy  { background: #10b981; color: white; }
+    .btn-row-sell { background: #ef4444; color: white; }
+    .btn-row-buy:hover, .btn-row-sell:hover { opacity: 0.82; }
   </style>
 </head>
 <body>
@@ -772,6 +829,49 @@
   </div>
 </div>
 
+<!-- ═══════════════ TRADE MODAL ═══════════════ -->
+<div class="trade-overlay" id="trade-overlay" onclick="if(event.target===this)closeTrade()">
+  <div class="trade-modal">
+    <h3 id="trade-title">💹 Place Order</h3>
+    <div class="trade-field">
+      <label>SYMBOL</label>
+      <input id="trade-symbol" type="text" readonly>
+    </div>
+    <div class="trade-field">
+      <label>CURRENT PRICE (₹)</label>
+      <input id="trade-price-display" type="text" readonly>
+    </div>
+    <div class="trade-field">
+      <label>QUANTITY</label>
+      <input id="trade-qty" type="number" min="1" value="1">
+    </div>
+    <div class="trade-field">
+      <label>ORDER TYPE</label>
+      <select id="trade-order-type" onchange="document.getElementById('trade-limit-wrap').style.display=this.value==='LIMIT'?'block':'none'">
+        <option value="MARKET">Market</option>
+        <option value="LIMIT">Limit</option>
+      </select>
+    </div>
+    <div class="trade-field" id="trade-limit-wrap" style="display:none">
+      <label>LIMIT PRICE (₹)</label>
+      <input id="trade-limit-price" type="number" step="0.05" placeholder="Enter limit price">
+    </div>
+    <div class="trade-field">
+      <label>PRODUCT</label>
+      <select id="trade-product">
+        <option value="CNC">CNC (Delivery — for dividend capture)</option>
+        <option value="MIS">MIS (Intraday)</option>
+      </select>
+    </div>
+    <div class="trade-action-row">
+      <button class="btn-trade-buy"    id="trade-btn-buy"  onclick="submitTrade('BUY')">🟢 BUY</button>
+      <button class="btn-trade-sell"   id="trade-btn-sell" onclick="submitTrade('SELL')">🔴 SELL</button>
+      <button class="btn-trade-cancel" onclick="closeTrade()">Cancel</button>
+    </div>
+    <div class="trade-status" id="trade-status"></div>
+  </div>
+</div>
+
 <!-- ═══════════════ TOASTS ═══════════════ -->
 <div class="toast-wrap" id="toasts"></div>
 
@@ -911,6 +1011,8 @@ function rowHTML(d, i) {
     <div>${trendBadgeHTML(d.trend)}</div>
 
     <div class="action-btns" onclick="event.stopPropagation()">
+      <button class="btn-row-buy"  onclick="openTrade('${(d.symbol||'').replace(/'/g,"\\'")}','BUY',${d.price||0})">BUY</button>
+      <button class="btn-row-sell" onclick="openTrade('${(d.symbol||'').replace(/'/g,"\\'")}','SELL',${d.price||0})">SELL</button>
       <button class="action-btn bell"  onclick="openAlert(${i})" title="Alert">🔔</button>
       <button class="action-btn chart" onclick="openDetail(${i})" title="Details">📊</button>
     </div>
@@ -1030,7 +1132,15 @@ function openDetail(idx) {
     <div class="entry-box-row" style="margin-top:4px">
       <span>S2 Exit (Trend)</span><strong>Close below 20DMA</strong>
     </div>
-  </div>` : ''}`;
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn-trade-buy"  style="flex:1;padding:9px" onclick="closeDetail();openTrade('${(d.symbol||'').replace(/'/g,"\\'")}','BUY',${d.price||0})">🟢 BUY ${d.symbol||''}</button>
+      <button class="btn-trade-sell" style="flex:1;padding:9px" onclick="closeDetail();openTrade('${(d.symbol||'').replace(/'/g,"\\'")}','SELL',${d.price||0})">🔴 SELL ${d.symbol||''}</button>
+    </div>
+  </div>` : `
+  <div style="display:flex;gap:8px;margin-top:14px">
+    <button class="btn-trade-buy"  style="flex:1;padding:9px" onclick="closeDetail();openTrade('${(d.symbol||'').replace(/'/g,"\\'")}','BUY',${d.price||0})">🟢 BUY ${d.symbol||''}</button>
+    <button class="btn-trade-sell" style="flex:1;padding:9px" onclick="closeDetail();openTrade('${(d.symbol||'').replace(/'/g,"\\'")}','SELL',${d.price||0})">🔴 SELL ${d.symbol||''}</button>
+  </div>`}`;
 
   document.getElementById('detail-overlay').classList.add('open');
 }
@@ -1364,6 +1474,86 @@ function updateExitLabel() {
 }
 
 /* No demo data — radar shows only live data from DRE cron */
+
+/* ═══════════════════════════════════════════════════
+   TRADE MODAL — calls same /api/place_order endpoint as dashboard
+═══════════════════════════════════════════════════ */
+let _tradeSide = 'BUY';
+
+function openTrade(symbol, side, price) {
+  _tradeSide = side;
+  document.getElementById('trade-title').textContent =
+    (side === 'BUY' ? '🟢 BUY ' : '🔴 SELL ') + symbol;
+  document.getElementById('trade-symbol').value        = symbol;
+  document.getElementById('trade-price-display').value = price > 0 ? `₹${Number(price).toFixed(2)}` : '—';
+  document.getElementById('trade-qty').value           = 1;
+  document.getElementById('trade-order-type').value    = 'MARKET';
+  document.getElementById('trade-limit-wrap').style.display = 'none';
+  document.getElementById('trade-product').value       = 'CNC';
+  document.getElementById('trade-status').textContent  = '';
+  document.getElementById('trade-status').className    = 'trade-status';
+
+  // Show only the relevant button
+  document.getElementById('trade-btn-buy').style.display  = side === 'BUY'  ? '' : 'none';
+  document.getElementById('trade-btn-sell').style.display = side === 'SELL' ? '' : 'none';
+
+  document.getElementById('trade-overlay').classList.add('open');
+}
+
+function closeTrade() {
+  document.getElementById('trade-overlay').classList.remove('open');
+}
+
+async function submitTrade(side) {
+  const symbol    = document.getElementById('trade-symbol').value;
+  const qty       = parseInt(document.getElementById('trade-qty').value) || 1;
+  const orderType = document.getElementById('trade-order-type').value;
+  const product   = document.getElementById('trade-product').value;
+  const limitPrice= parseFloat(document.getElementById('trade-limit-price').value) || null;
+  const statusEl  = document.getElementById('trade-status');
+
+  const token = localStorage.getItem('access_token');
+  if (!token) {
+    statusEl.textContent = 'Not logged in — please log in from the dashboard first.';
+    statusEl.className = 'trade-status err';
+    return;
+  }
+
+  const btn = document.getElementById(side === 'BUY' ? 'trade-btn-buy' : 'trade-btn-sell');
+  btn.disabled = true;
+  statusEl.textContent = 'Placing order…';
+  statusEl.className = 'trade-status';
+
+  try {
+    const res = await fetch(`${API_BASE}/api/place_order`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({
+        symbol,
+        side,
+        quantity:   qty,
+        order_type: orderType,
+        price:      orderType === 'LIMIT' ? limitPrice : null,
+        product
+      })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      statusEl.textContent = `✅ ${side} order placed! Order ID: ${data.order_id}`;
+      statusEl.className = 'trade-status ok';
+      toast(`${side} ${symbol} × ${qty} placed`, 'success');
+      setTimeout(closeTrade, 2200);
+    } else {
+      statusEl.textContent = `❌ ${data.detail || 'Order failed'}`;
+      statusEl.className = 'trade-status err';
+    }
+  } catch(e) {
+    statusEl.textContent = `❌ Network error: ${e.message}`;
+    statusEl.className = 'trade-status err';
+  } finally {
+    btn.disabled = false;
+  }
+}
 
 /* ═══════════════════════════════════════════════════
    INIT
