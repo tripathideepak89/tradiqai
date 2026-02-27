@@ -1221,6 +1221,29 @@ HTML_TEMPLATE = """
             </div>
         </div>
         
+        <!-- CME Portfolio Overview -->
+        <div class="card" id="portfolioCard">
+            <h2>🏦 Portfolio Overview <span id="cmeRiskBadge" style="font-size:13px; padding:3px 10px; border-radius:12px; margin-left:8px; vertical-align:middle;"></span></h2>
+            <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:12px;">
+                <div class="metric"><span class="metric-label">Total Capital</span><span class="metric-value" id="cmeCapital">₹1,00,000</span></div>
+                <div class="metric"><span class="metric-label">Cash Available</span><span class="metric-value" id="cmeCash">—</span></div>
+                <div class="metric"><span class="metric-label">Deployed</span><span class="metric-value" id="cmeExposure">—</span></div>
+                <div class="metric"><span class="metric-label">Drawdown</span><span class="metric-value" id="cmeDrawdown">—</span></div>
+                <div class="metric"><span class="metric-label">Peak Equity</span><span class="metric-value" id="cmePeak">—</span></div>
+                <div class="metric"><span class="metric-label">Regime</span><span class="metric-value" id="cmeRegime">—</span></div>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                <div>
+                    <div style="font-size:12px; color:#667eea; font-weight:600; margin-bottom:6px;">Strategy Allocation</div>
+                    <div id="cmeStrategyBars"></div>
+                </div>
+                <div>
+                    <div style="font-size:12px; color:#667eea; font-weight:600; margin-bottom:6px;">Sector Exposure</div>
+                    <div id="cmeSectorBars"></div>
+                </div>
+            </div>
+        </div>
+
         <!-- Monitored Stocks -->
         <div class="card">
             <h2>👁️ Monitored Stocks</h2>
@@ -1718,6 +1741,9 @@ HTML_TEMPLATE = """
             console.log('[Dashboard] Updating news feed:', data.news_feed ? data.news_feed.length : 0, 'items');
             updateNewsFeed(data.news_feed);
 
+            // Update CME portfolio panel
+            updatePortfolio(data.portfolio);
+
             // Update manual approval banner
             updateApprovalBanner(data.approval_alerts);
 
@@ -1876,6 +1902,69 @@ HTML_TEMPLATE = """
             });
             
             container.innerHTML = html;
+        }
+
+        function updatePortfolio(p) {
+            if (!p || !p.total_capital) return;
+
+            // Risk mode badge
+            const badge = document.getElementById('cmeRiskBadge');
+            const modeColors = { NORMAL: '#10b981', REDUCED: '#f59e0b', HALTED: '#ef4444' };
+            badge.textContent = p.risk_mode;
+            badge.style.background = modeColors[p.risk_mode] || '#6b7280';
+            badge.style.color = '#fff';
+
+            // Headline numbers
+            const fmt = v => '₹' + Math.round(v).toLocaleString('en-IN');
+            document.getElementById('cmeCapital').textContent = fmt(p.total_capital);
+            document.getElementById('cmeCash').textContent    = fmt(p.cash_available);
+
+            const expPct = p.exposure_pct ? p.exposure_pct.toFixed(1) + '%' : '0%';
+            document.getElementById('cmeExposure').textContent = fmt(p.total_exposure) + ' (' + expPct + ')';
+
+            const ddEl = document.getElementById('cmeDrawdown');
+            ddEl.textContent = (p.drawdown_pct || 0).toFixed(2) + '%';
+            ddEl.style.color = p.drawdown_pct >= 8 ? '#ef4444' : p.drawdown_pct >= 4 ? '#f59e0b' : '#10b981';
+
+            document.getElementById('cmePeak').textContent   = fmt(p.peak_equity);
+            document.getElementById('cmeRegime').textContent = p.regime || '—';
+
+            // Strategy allocation bars (cap = 30%, intraday 10%)
+            const stratCaps = { DIVIDEND: 30, SWING: 30, MID_TERM: 30, INTRADAY: 10 };
+            const stratExp  = p.strategy_exposure || {};
+            let stratHtml   = '';
+            for (const [b, cap] of Object.entries(stratCaps)) {
+                const val     = stratExp[b] || 0;
+                const pct     = Math.min(100, (val / (p.total_capital * cap / 100)) * 100);
+                const barColor = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : '#10b981';
+                stratHtml += `<div style="margin-bottom:6px;">
+                    <div style="display:flex; justify-content:space-between; font-size:11px; color:#94a3b8;">
+                        <span>${b}</span><span>${fmt(val)} / ${fmt(p.total_capital * cap / 100)}</span>
+                    </div>
+                    <div style="background:#1e293b; border-radius:4px; height:6px; margin-top:2px;">
+                        <div style="width:${pct.toFixed(1)}%; background:${barColor}; height:6px; border-radius:4px;"></div>
+                    </div></div>`;
+            }
+            document.getElementById('cmeStrategyBars').innerHTML = stratHtml;
+
+            // Sector exposure bars (cap = 30%)
+            const secExp   = p.sector_exposure || {};
+            const secCap   = p.total_capital * 0.30;
+            const sectors  = Object.entries(secExp).sort((a, b) => b[1] - a[1]).slice(0, 6);
+            let secHtml    = '';
+            for (const [sec, val] of sectors) {
+                const pct      = Math.min(100, (val / secCap) * 100);
+                const barColor = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : '#667eea';
+                secHtml += `<div style="margin-bottom:6px;">
+                    <div style="display:flex; justify-content:space-between; font-size:11px; color:#94a3b8;">
+                        <span>${sec}</span><span>${fmt(val)}</span>
+                    </div>
+                    <div style="background:#1e293b; border-radius:4px; height:6px; margin-top:2px;">
+                        <div style="width:${pct.toFixed(1)}%; background:${barColor}; height:6px; border-radius:4px;"></div>
+                    </div></div>`;
+            }
+            if (!sectors.length) secHtml = '<div style="color:#64748b; font-size:12px;">No open positions</div>';
+            document.getElementById('cmeSectorBars').innerHTML = secHtml;
         }
 
         function updateApprovalBanner(alerts) {
@@ -2494,6 +2583,26 @@ async def get_dashboard_data(user_id: str) -> Dict:
         # TODO: Implement news feed from Supabase when news_items table is ready
         news_feed_data = []
 
+        # CME portfolio snapshot — read live state from local DB
+        portfolio_snapshot = {}
+        try:
+            from capital_manager import CapitalManager
+            from database import get_session_local
+            _cme_SL = get_session_local()
+            if _cme_SL:
+                _cme_db = _cme_SL()
+                try:
+                    from config import settings as _cfg
+                    _cme = CapitalManager(
+                        db_session=_cme_db,
+                        total_capital=getattr(_cfg, 'cme_total_capital', 100_000.0),
+                    )
+                    portfolio_snapshot = _cme.get_snapshot().to_dict()
+                finally:
+                    _cme_db.close()
+        except Exception as _cme_e:
+            logger.debug(f"CME snapshot skipped: {_cme_e}")
+
         # Query local PostgreSQL for trades blocked by the ₹1L approval gate
         approval_alerts = []
         try:
@@ -2548,7 +2657,9 @@ async def get_dashboard_data(user_id: str) -> Dict:
             # Dividend Radar Engine candidates (if scheduler has run)
             "dividend_radar": [],
             # Trades blocked by ₹1L approval gate — require manual sell
-            "approval_alerts": approval_alerts
+            "approval_alerts": approval_alerts,
+            # Capital Management Engine snapshot
+            "portfolio": portfolio_snapshot
         }
         
     except Exception as e:

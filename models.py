@@ -253,3 +253,41 @@ class NewsItem(Base):
     
     def __repr__(self):
         return f"<NewsItem {self.symbol} - {self.headline[:50]}>"
+
+
+class PortfolioMetrics(Base):
+    """Snapshot of CME portfolio state — written after every trade approval/exit.
+
+    Stores the full capital allocation picture so the dashboard can show
+    real-time exposure, drawdown, and risk mode without re-computing live.
+    """
+    __tablename__ = "portfolio_metrics"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Capital overview
+    total_capital    = Column(Float, nullable=False)
+    cash_available   = Column(Float, nullable=False)
+    total_exposure   = Column(Float, default=0.0)
+    peak_equity      = Column(Float, nullable=False)
+    current_equity   = Column(Float, nullable=False)
+    drawdown_pct     = Column(Float, default=0.0)
+
+    # Risk mode: NORMAL | REDUCED | HALTED
+    risk_mode        = Column(String(20), default="NORMAL")
+
+    # JSON strings: {"SWING": 25000, "INTRADAY": 0, ...}
+    strategy_exposure = Column(Text, nullable=True)
+    sector_exposure   = Column(Text, nullable=True)
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    def __repr__(self):
+        return (
+            f"<PortfolioMetrics capital=₹{self.total_capital:,.0f} "
+            f"drawdown={self.drawdown_pct:.1f}% mode={self.risk_mode}>"
+        )

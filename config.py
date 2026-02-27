@@ -81,6 +81,9 @@ class Settings(BaseSettings):
     # Safety
     enable_kill_switch: bool = True
     position_reconciliation_interval: int = 10
+
+    # Capital Management Engine (CME)
+    cme_total_capital: float = 100_000.0  # ₹1,00,000 portfolio capital
     
     class Config:
         env_file = ".env"

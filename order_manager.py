@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 class OrderManager:
     """Manages order lifecycle and execution
-    
+
     Responsibilities:
     - Place orders via broker
     - Track order status
@@ -25,12 +25,20 @@ class OrderManager:
     - Handle order failures
     - Update trade records
     - Coordinate with risk engine
+    - CME gate (capital_manager) enforces portfolio-level rules
     """
-    
-    def __init__(self, broker: BaseBroker, risk_engine: RiskEngine, db_session: Session):
+
+    def __init__(
+        self,
+        broker: BaseBroker,
+        risk_engine: RiskEngine,
+        db_session: Session,
+        capital_manager=None,   # Optional[CapitalManager] — avoids circular import
+    ):
         self.broker = broker
         self.risk_engine = risk_engine
         self.db = db_session
+        self.capital_manager = capital_manager   # CME gatekeeper
         self.active_orders: Dict[str, Trade] = {}  # order_id -> Trade
         self.position_reconciliation_interval = settings.position_reconciliation_interval
     
@@ -237,6 +245,35 @@ class OrderManager:
                     f"Minimum required move: ₹{min_move_required:.2f}/share"
                 )
             
+            # 1.5 CME GATE — portfolio-level capital & risk rules
+            if self.capital_manager is not None:
+                cme = self.capital_manager.approve_trade(
+                    symbol=signal.symbol,
+                    entry_price=signal.entry_price,
+                    stop_loss=signal.stop_loss,
+                    strategy_name=strategy_name,
+                    product=getattr(signal, 'product', 'CNC'),
+                    proposed_quantity=signal.quantity,
+                )
+                if not cme.approved:
+                    logger.warning(f"[CME] {signal.symbol} REJECTED: {cme.reason}")
+                    self._log_event(
+                        event_type="CME_REJECTED",
+                        message=cme.reason,
+                        symbol=signal.symbol,
+                        severity="WARNING"
+                    )
+                    return None
+
+                # Apply CME-adjusted quantity (risk-sized, not strategy-sized)
+                if cme.adjusted_quantity > 0 and cme.adjusted_quantity != signal.quantity:
+                    logger.info(
+                        f"[CME] {signal.symbol} quantity adjusted: "
+                        f"{signal.quantity} → {cme.adjusted_quantity} "
+                        f"(risk=₹{cme.risk_per_trade:.0f}, mode={cme.risk_mode})"
+                    )
+                    signal.quantity = cme.adjusted_quantity
+
             # 2. Risk check with cost-awareness
             risk_check = await self.risk_engine.check_trade_approval(
                 symbol=signal.symbol,

@@ -119,8 +119,22 @@ class TradingSystem:
             await self.risk_engine.update_available_capital()
             logger.info(f"[OK] Trading capital: Rs{self.risk_engine.available_capital:,.2f}")
             
-            # 4. Initialize order manager
-            self.order_manager = OrderManager(self.broker, self.risk_engine, self.db)
+            # 4. Initialize Capital Management Engine (CME)
+            from capital_manager import CapitalManager
+            self.capital_manager = CapitalManager(
+                db_session=self.db,
+                total_capital=settings.cme_total_capital,
+            )
+            logger.info(
+                f"[OK] Capital Management Engine initialized — "
+                f"₹{settings.cme_total_capital:,.0f} capital"
+            )
+
+            # 4b. Initialize order manager (pass CME as gatekeeper)
+            self.order_manager = OrderManager(
+                self.broker, self.risk_engine, self.db,
+                capital_manager=self.capital_manager,
+            )
             logger.info("[OK] Order manager initialized")
             
             # 4a. Sync broker positions to database on startup
@@ -244,10 +258,33 @@ class TradingSystem:
                 
                 # Scan for signals
                 await self.scan_for_signals()
-                
+
                 # Check for exits
                 await self.check_exits()
-                
+
+                # Refresh CME equity for drawdown tracking
+                if hasattr(self, 'capital_manager') and self.capital_manager is not None:
+                    try:
+                        margins = await self.broker.get_margins()
+                        unrealized = 0.0
+                        positions  = await self.broker.get_positions()
+                        if positions:
+                            for pos in positions:
+                                ltp = pos.last_price if pos.last_price else pos.average_price
+                                qty = pos.quantity
+                                avg = pos.average_price
+                                if qty > 0:
+                                    unrealized += (ltp - avg) * qty
+                                else:
+                                    unrealized += (avg - ltp) * abs(qty)
+                        realized = margins.get("total_pnl", 0.0) if margins else 0.0
+                        self.capital_manager.update_equity(
+                            unrealized_pnl=unrealized,
+                            realized_pnl=realized,
+                        )
+                    except Exception as _cme_e:
+                        logger.debug(f"[CME] equity update skipped: {_cme_e}")
+
                 # Wait before next iteration
                 await asyncio.sleep(60)  # Scan every minute
                 
