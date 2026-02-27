@@ -86,6 +86,54 @@ try:
 except Exception as _dre_err:
     logger.warning(f"⚠️ DRE routes not loaded: {_dre_err}")
 
+# ── Portfolio Analytics API ──────────────────────────────────────────────────
+try:
+    from api_portfolio import router as _portfolio_router
+    app.include_router(_portfolio_router)
+    logger.info("✅ Portfolio Analytics API routes registered")
+except Exception as _pf_err:
+    logger.warning(f"⚠️ Portfolio analytics routes not loaded: {_pf_err}")
+
+
+# ── Portfolio Analytics HTML pages ──────────────────────────────────────────
+
+def _serve_template(filename: str) -> HTMLResponse:
+    """Helper: read and serve an HTML template file."""
+    try:
+        with open(f"templates/{filename}", "r", encoding="utf-8") as f:
+            html = f.read()
+        return HTMLResponse(
+            content=html,
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate"}
+        )
+    except FileNotFoundError:
+        return HTMLResponse(f"<h2>Template {filename} not found.</h2>", status_code=404)
+
+
+@app.get("/risk-dashboard")
+async def risk_dashboard_page():
+    """Institutional-style portfolio risk dashboard."""
+    return _serve_template("risk_dashboard.html")
+
+
+@app.get("/compounding-plan")
+async def compounding_plan_page():
+    """Capital compounding plan: ₹1L → ₹5L projections."""
+    return _serve_template("compounding_plan.html")
+
+
+@app.get("/rebalance")
+async def rebalance_page():
+    """Monthly strategy rebalancer (recommendations only)."""
+    return _serve_template("rebalance.html")
+
+
+@app.get("/risk-of-ruin")
+async def risk_of_ruin_page():
+    """Monte Carlo risk-of-ruin calculator."""
+    return _serve_template("risk_of_ruin.html")
+
+
 @app.get("/dividend-radar")
 async def dividend_radar_page():
     """Serve the Dividend Radar Engine dashboard (auth enforced client-side)."""

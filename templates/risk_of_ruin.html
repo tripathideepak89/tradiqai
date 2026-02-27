@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Risk of Ruin — TradiqAI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root{--bg0:#060810;--bg1:#0b0f18;--bg2:#0f1420;--bg3:#141a27;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.04);--text0:#dde8f5;--text1:#8899bb;--text2:#44556a;--green:#00ff9d;--yellow:#f5c518;--orange:#ff8c42;--red:#ff4d6d;--blue:#4dabff;--purple:#c77dff;--font-mono:'JetBrains Mono',monospace;--font-head:'Syne',sans-serif;}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:var(--font-mono);background:var(--bg0);color:var(--text0);min-height:100vh;}
+    ::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-track{background:var(--bg1);} ::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:2px;}
+    .topbar{position:sticky;top:0;z-index:100;background:linear-gradient(180deg,var(--bg1) 0%,transparent 100%);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;}
+    .topbar-left{display:flex;align-items:center;gap:14px;}
+    .logo-icon{width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,#ff4d6d,#c77dff);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+    .logo-title{font-family:var(--font-head);font-weight:800;font-size:17px;letter-spacing:-0.3px;}
+    .logo-sub{font-size:9px;color:var(--text2);letter-spacing:2px;}
+    .topbar-right{display:flex;align-items:center;gap:16px;}
+    .nav-link{color:var(--text1);text-decoration:none;font-size:11px;padding:6px 12px;border-radius:6px;border:1px solid var(--border);transition:all 0.15s;}
+    .nav-link:hover{color:var(--text0);border-color:rgba(255,255,255,0.15);}
+    .back-btn{background:rgba(77,171,255,0.1);border:1px solid rgba(77,171,255,0.3);color:var(--blue);border-radius:7px;padding:6px 14px;font-size:11px;font-family:var(--font-mono);cursor:pointer;text-decoration:none;}
+    .content{padding:22px 28px;max-width:1400px;margin:0 auto;}
+    .page-title{font-family:var(--font-head);font-size:24px;font-weight:800;margin-bottom:4px;}
+    .page-sub{font-size:11px;color:var(--text2);margin-bottom:22px;}
+
+    .controls-row{display:flex;align-items:center;gap:16px;margin-bottom:22px;flex-wrap:wrap;}
+    .ctrl-group{display:flex;flex-direction:column;gap:4px;}
+    .ctrl-label{font-size:9px;color:var(--text2);letter-spacing:1px;}
+    input[type=number]{background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:7px;padding:6px 12px;color:var(--text0);font-size:11px;font-family:var(--font-mono);outline:none;width:120px;}
+    .run-btn{background:rgba(255,77,109,0.15);border:1px solid rgba(255,77,109,0.4);color:var(--red);border-radius:8px;padding:8px 20px;font-size:11px;font-family:var(--font-mono);cursor:pointer;font-weight:700;transition:all 0.15s;align-self:flex-end;}
+    .run-btn:hover{background:rgba(255,77,109,0.25);}
+    .run-btn:disabled{opacity:0.4;pointer-events:none;}
+
+    /* Ruin probability gauge */
+    .ruin-gauge{text-align:center;padding:28px;background:linear-gradient(135deg,var(--bg1),var(--bg2));border-radius:13px;border:1px solid var(--border2);margin-bottom:20px;}
+    .ruin-pct{font-family:var(--font-head);font-size:64px;font-weight:800;line-height:1;}
+    .ruin-label{font-size:11px;color:var(--text2);letter-spacing:2px;margin-top:8px;}
+    .ruin-verdict{margin-top:12px;font-size:13px;padding:8px 20px;border-radius:8px;display:inline-block;}
+    .ruin-verdict.safe{background:rgba(0,255,157,0.1);color:var(--green);border:1px solid rgba(0,255,157,0.3);}
+    .ruin-verdict.moderate{background:rgba(245,197,24,0.1);color:var(--yellow);border:1px solid rgba(245,197,24,0.3);}
+    .ruin-verdict.danger{background:rgba(255,77,109,0.1);color:var(--red);border:1px solid rgba(255,77,109,0.3);}
+
+    .stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px;}
+    @media(max-width:1100px){.stats-grid{grid-template-columns:repeat(3,1fr);}}
+    @media(max-width:700px){.stats-grid{grid-template-columns:1fr 1fr;}}
+    .stat-card{background:linear-gradient(135deg,var(--bg1),var(--bg2));border-radius:12px;padding:16px 18px;border:1px solid var(--border2);}
+    .stat-label{font-size:9px;color:var(--text2);letter-spacing:1.5px;margin-bottom:8px;}
+    .stat-value{font-size:20px;font-weight:700;line-height:1;}
+
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;}
+    @media(max-width:900px){.two-col{grid-template-columns:1fr;}}
+    .card{background:linear-gradient(135deg,var(--bg1),var(--bg2));border-radius:13px;padding:18px 20px;border:1px solid var(--border2);margin-bottom:18px;}
+    .card-title{font-size:11px;color:var(--text2);letter-spacing:1px;margin-bottom:14px;font-weight:700;}
+
+    /* Percentile bars */
+    .perc-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:10px;}
+    .perc-label{width:60px;color:var(--text2);}
+    .perc-bar-track{flex:1;background:rgba(255,255,255,0.05);border-radius:3px;height:8px;overflow:hidden;}
+    .perc-bar-fill{height:100%;border-radius:3px;}
+    .perc-value{width:80px;text-align:right;font-weight:600;}
+
+    /* Equity fan chart */
+    .chart-area{background:var(--bg3);border-radius:8px;height:220px;overflow:hidden;position:relative;}
+    canvas.chart-canvas{width:100%;height:100%;}
+
+    .rec-box{background:rgba(0,255,157,0.06);border:1px solid rgba(0,255,157,0.2);border-radius:10px;padding:16px 18px;display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .rec-item .rec-label{font-size:9px;color:var(--text2);letter-spacing:1.2px;margin-bottom:6px;}
+    .rec-item .rec-value{font-size:18px;font-weight:700;color:var(--green);}
+
+    .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--red);border-radius:50%;animation:spin 0.7s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+    .loading-state{text-align:center;padding:60px 0;color:var(--text2);}
+    .error-state{text-align:center;padding:40px 0;color:var(--red);}
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="logo-icon">💀</div>
+      <div><div class="logo-title">Risk of Ruin</div><div class="logo-sub">MONTE CARLO SIMULATION</div></div>
+    </div>
+    <div class="topbar-right">
+      <a href="/dashboard" class="back-btn">← Dashboard</a>
+      <a href="/risk-dashboard" class="nav-link">Risk</a>
+      <a href="/compounding-plan" class="nav-link">Compounding</a>
+      <a href="/rebalance" class="nav-link">Rebalancer</a>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="page-title">Risk-of-Ruin Calculator</div>
+    <div class="page-sub">Monte Carlo bootstrap using your historical trade R-multiples</div>
+
+    <div class="controls-row">
+      <div class="ctrl-group"><div class="ctrl-label">RUIN THRESHOLD %</div><input type="number" id="ruinPct" value="20" min="5" max="50" step="5" /></div>
+      <div class="ctrl-group"><div class="ctrl-label">SIMULATIONS</div><input type="number" id="simCount" value="2000" min="100" max="5000" step="100" /></div>
+      <div class="ctrl-group"><div class="ctrl-label">TRADES PER SIM</div><input type="number" id="tradesPerSim" value="100" min="20" max="500" step="10" /></div>
+      <button class="run-btn" id="runBtn" onclick="runSim()">▶ Run Simulation</button>
+    </div>
+
+    <div id="loadingState" class="loading-state" style="display:none;"><div class="spinner"></div><div style="margin-top:12px;font-size:11px;">Running Monte Carlo (<span id="simCountLabel">2000</span> simulations)…</div></div>
+    <div id="errorState" class="error-state" style="display:none;"></div>
+    <div id="mainContent" style="display:none;"></div>
+  </div>
+
+<script>
+(function(){if(!localStorage.getItem('access_token')){window.location.replace('/');}})();
+function _h(){const t=localStorage.getItem('access_token');return t?{'Authorization':'Bearer '+t}:{};}
+const API='';
+
+function fmt(v){return '₹'+(v||0).toLocaleString('en-IN',{maximumFractionDigits:0});}
+function ruinColor(p){return p<5?'var(--green)':p<15?'var(--yellow)':'var(--red)';}
+function ruinVerdict(p){
+  if(p<5)return {cls:'safe',text:'Low Risk — Your edge is solid. Keep trading with discipline.'};
+  if(p<15)return {cls:'moderate',text:'Moderate Risk — Consider reducing position sizing or improving edge.'};
+  return {cls:'danger',text:'High Risk — Your system needs more edge before scaling up.'};
+}
+
+function drawFanChart(canvasId, curves, startingCapital){
+  const canvas=document.getElementById(canvasId);
+  if(!canvas)return;
+  const ctx=canvas.getContext('2d');
+  const W=canvas.offsetWidth, H=canvas.offsetHeight;
+  canvas.width=W; canvas.height=H;
+
+  const allVals=[].concat(...Object.values(curves).map(c=>c));
+  const minV=Math.min(startingCapital*0.5,...allVals);
+  const maxV=Math.max(startingCapital*1.5,...allVals);
+  const range=maxV-minV||1;
+
+  function plotLine(data, color, lw, fill){
+    if(!data||!data.length)return;
+    const n=data.length;
+    ctx.strokeStyle=color; ctx.lineWidth=lw; ctx.beginPath();
+    data.forEach((v,i)=>{
+      const x=10+(W-20)*i/(n-1);
+      const y=H-10-(H-20)*(v-minV)/range;
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+    if(fill){
+      const grad=ctx.createLinearGradient(0,0,0,H);
+      grad.addColorStop(0,color+'22'); grad.addColorStop(1,color+'00');
+      ctx.fillStyle=grad;
+      ctx.lineTo(W-10,H-10); ctx.lineTo(10,H-10); ctx.closePath(); ctx.fill();
+    }
+  }
+
+  // Starting capital line
+  const scY=H-10-(H-20)*(startingCapital-minV)/range;
+  ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=1; ctx.setLineDash([3,4]);
+  ctx.beginPath(); ctx.moveTo(10,scY); ctx.lineTo(W-10,scY); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Fan (p5=red, p25=orange, median=blue, p75=green-dim, p95=green)
+  plotLine(curves.p5,    '#ff4d6d', 1, false);
+  plotLine(curves.p25,   '#ff8c42', 1, false);
+  plotLine(curves.median,'#4dabff', 2, true);
+  plotLine(curves.p75,   '#00cc7a', 1, false);
+  plotLine(curves.p95,   '#00ff9d', 1, false);
+}
+
+function render(d){
+  const mc=document.getElementById('mainContent');
+  mc.style.display='';
+
+  const rrPct=d.ruin_probability_pct;
+  const v=ruinVerdict(rrPct);
+  const col=ruinColor(rrPct);
+
+  // Percentile bars (min to max)
+  const percData=[
+    {label:'5th',val:d.pct5_final_capital,col:'var(--red)'},
+    {label:'25th',val:d.pct25_final_capital,col:'var(--orange)'},
+    {label:'Median',val:d.median_final_capital,col:'var(--blue)'},
+    {label:'75th',val:d.pct75_final_capital,col:'var(--green)'},
+    {label:'95th',val:d.pct95_final_capital,col:'#00ff9d'},
+  ];
+  const percMax=Math.max(...percData.map(p=>p.val));
+  const percBarsHtml=percData.map(p=>`
+    <div class="perc-row">
+      <span class="perc-label">${p.label}</span>
+      <div class="perc-bar-track"><div class="perc-bar-fill" style="width:${Math.max(1,(p.val/percMax*100)).toFixed(1)}%;background:${p.col}"></div></div>
+      <span class="perc-value" style="color:${p.col}">${fmt(p.val)}</span>
+    </div>
+  `).join('');
+
+  mc.innerHTML=`
+    <div class="ruin-gauge">
+      <div class="ruin-pct" style="color:${col}">${rrPct.toFixed(1)}%</div>
+      <div class="ruin-label">PROBABILITY OF RUIN (${d.ruin_threshold_pct}% DRAWDOWN THRESHOLD)</div>
+      <div class="ruin-verdict ${v.cls}">${v.text}</div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-label">SAMPLE SIZE</div><div class="stat-value">${d.r_multiple_count} trades</div></div>
+      <div class="stat-card"><div class="stat-label">WIN RATE</div><div class="stat-value" style="color:${d.win_rate_pct>=50?'var(--green)':'var(--red)'}">${d.win_rate_pct.toFixed(1)}%</div></div>
+      <div class="stat-card"><div class="stat-label">AVG WIN R</div><div class="stat-value" style="color:var(--green)">+${d.avg_win_r.toFixed(2)}R</div></div>
+      <div class="stat-card"><div class="stat-label">AVG LOSS R</div><div class="stat-value" style="color:var(--red)">${d.avg_loss_r.toFixed(2)}R</div></div>
+      <div class="stat-card"><div class="stat-label">EXPECTANCY</div><div class="stat-value" style="color:${d.expectancy_r>=0?'var(--green)':'var(--red)'}">${d.expectancy_r>0?'+':''}${d.expectancy_r.toFixed(3)}R</div></div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">OUTCOME DISTRIBUTION (${d.simulation_count} SIMULATIONS × ${d.trades_per_sim} TRADES)</div>
+        ${percBarsHtml}
+        <div style="margin-top:12px;font-size:9px;color:var(--text2)">Avg Max Drawdown: ${d.avg_max_drawdown_pct.toFixed(1)}%</div>
+      </div>
+      <div class="card">
+        <div class="card-title">EQUITY FAN CHART</div>
+        <div class="chart-area"><canvas id="fanChart" class="chart-canvas"></canvas></div>
+        <div style="margin-top:8px;font-size:9px;color:var(--text2)">
+          <span style="color:var(--red)">─</span> 5th &nbsp;
+          <span style="color:var(--orange)">─</span> 25th &nbsp;
+          <span style="color:var(--blue)">─</span> Median &nbsp;
+          <span style="color:var(--green)">─</span> 75th/95th
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">RECOMMENDATIONS</div>
+      <div class="rec-box">
+        <div class="rec-item"><div class="rec-label">KELLY FRACTION</div><div class="rec-value">${(d.kelly_fraction*100).toFixed(1)}%</div></div>
+        <div class="rec-item"><div class="rec-label">RECOMMENDED RISK / TRADE</div><div class="rec-value">${d.recommended_risk_per_trade_pct.toFixed(2)}% (¼ Kelly)</div></div>
+        <div class="rec-item"><div class="rec-label">SAFE CONCURRENT POSITIONS</div><div class="rec-value">${d.safe_concurrent_positions}</div></div>
+        <div class="rec-item"><div class="rec-label">SIMULATIONS RUINED</div><div class="rec-value" style="color:${ruinColor(rrPct)}">${(rrPct/100*d.simulation_count).toFixed(0)} / ${d.simulation_count}</div></div>
+      </div>
+    </div>
+  `;
+
+  setTimeout(()=>{
+    drawFanChart('fanChart', d.equity_curves, d.starting_capital);
+  }, 100);
+}
+
+async function runSim(){
+  const btn=document.getElementById('runBtn');
+  btn.disabled=true;
+  const sc=document.getElementById('simCount').value;
+  document.getElementById('simCountLabel').textContent=sc;
+  document.getElementById('loadingState').style.display='';
+  document.getElementById('errorState').style.display='none';
+  document.getElementById('mainContent').style.display='none';
+  try{
+    const body={
+      ruin_threshold_pct:parseFloat(document.getElementById('ruinPct').value),
+      simulation_count:parseInt(sc),
+      trades_per_sim:parseInt(document.getElementById('tradesPerSim').value),
+    };
+    const r=await fetch(API+'/api/risk/ruin',{method:'POST',headers:{'Content-Type':'application/json',..._h()},body:JSON.stringify(body)});
+    if(!r.ok)throw new Error(await r.text());
+    const d=await r.json();
+    document.getElementById('loadingState').style.display='none';
+    render(d);
+  }catch(e){
+    document.getElementById('loadingState').style.display='none';
+    const el=document.getElementById('errorState');
+    el.style.display=''; el.textContent='Error: '+e.message;
+  }finally{btn.disabled=false;}
+}
+
+// Auto-run on load with defaults
+runSim();
+</script>
+</body>
+</html>

@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Portfolio Risk Dashboard — TradiqAI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg0:#060810; --bg1:#0b0f18; --bg2:#0f1420; --bg3:#141a27;
+      --border:rgba(255,255,255,0.07); --border2:rgba(255,255,255,0.04);
+      --text0:#dde8f5; --text1:#8899bb; --text2:#44556a;
+      --green:#00ff9d; --yellow:#f5c518; --orange:#ff8c42;
+      --red:#ff4d6d; --blue:#4dabff; --purple:#c77dff;
+      --font-mono:'JetBrains Mono',monospace; --font-head:'Syne',sans-serif;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:var(--font-mono);background:var(--bg0);color:var(--text0);min-height:100vh;}
+    ::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-track{background:var(--bg1);}
+    ::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:2px;}
+
+    .topbar{position:sticky;top:0;z-index:100;background:linear-gradient(180deg,var(--bg1) 0%,transparent 100%);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;}
+    .topbar-left{display:flex;align-items:center;gap:14px;}
+    .logo-icon{width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,#0080ff,#00c4ff);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+    .logo-title{font-family:var(--font-head);font-weight:800;font-size:17px;letter-spacing:-0.3px;}
+    .logo-sub{font-size:9px;color:var(--text2);letter-spacing:2px;}
+    .topbar-right{display:flex;align-items:center;gap:16px;}
+    .nav-link{color:var(--text1);text-decoration:none;font-size:11px;padding:6px 12px;border-radius:6px;border:1px solid var(--border);transition:all 0.15s;}
+    .nav-link:hover{color:var(--text0);border-color:rgba(255,255,255,0.15);}
+    .back-btn{background:rgba(77,171,255,0.1);border:1px solid rgba(77,171,255,0.3);color:var(--blue);border-radius:7px;padding:6px 14px;font-size:11px;font-family:var(--font-mono);cursor:pointer;text-decoration:none;}
+
+    .content{padding:22px 28px;max-width:1400px;margin:0 auto;}
+    .page-title{font-family:var(--font-head);font-size:24px;font-weight:800;margin-bottom:4px;}
+    .page-sub{font-size:11px;color:var(--text2);margin-bottom:22px;}
+
+    /* Stat grid */
+    .stats-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:20px;}
+    @media(max-width:1200px){.stats-grid{grid-template-columns:repeat(3,1fr);}}
+    @media(max-width:700px){.stats-grid{grid-template-columns:repeat(2,1fr);}}
+    .stat-card{background:linear-gradient(135deg,var(--bg1),var(--bg2));border-radius:12px;padding:16px 18px;border:1px solid var(--border2);}
+    .stat-label{font-size:9px;color:var(--text2);letter-spacing:1.5px;margin-bottom:8px;}
+    .stat-value{font-size:22px;font-weight:700;line-height:1;}
+    .stat-sub{font-size:9px;color:var(--text2);margin-top:4px;}
+
+    /* Compliance flags */
+    .flags-section{margin-bottom:20px;}
+    .flags-title{font-size:11px;color:var(--text2);letter-spacing:1px;margin-bottom:10px;}
+    .flag{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;margin-bottom:6px;font-size:11px;}
+    .flag.BREACH{background:rgba(255,77,109,0.12);border:1px solid rgba(255,77,109,0.3);}
+    .flag.WARNING{background:rgba(245,197,24,0.08);border:1px solid rgba(245,197,24,0.25);}
+    .flag-badge{font-size:9px;font-weight:700;letter-spacing:1px;padding:2px 7px;border-radius:4px;flex-shrink:0;}
+    .flag.BREACH .flag-badge{background:rgba(255,77,109,0.3);color:var(--red);}
+    .flag.WARNING .flag-badge{background:rgba(245,197,24,0.2);color:var(--yellow);}
+    .flag-ok{padding:10px 14px;border-radius:8px;font-size:11px;color:var(--green);background:rgba(0,255,157,0.06);border:1px solid rgba(0,255,157,0.15);}
+
+    /* Two-col layout */
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;}
+    @media(max-width:900px){.two-col{grid-template-columns:1fr;}}
+    .card{background:linear-gradient(135deg,var(--bg1),var(--bg2));border-radius:13px;padding:18px 20px;border:1px solid var(--border2);}
+    .card-title{font-size:11px;color:var(--text2);letter-spacing:1px;margin-bottom:14px;font-weight:700;}
+
+    /* Bar rows */
+    .bar-row{margin-bottom:10px;}
+    .bar-row-header{display:flex;justify-content:space-between;font-size:10px;margin-bottom:4px;}
+    .bar-track{background:rgba(255,255,255,0.05);border-radius:3px;height:6px;overflow:hidden;}
+    .bar-fill{height:100%;border-radius:3px;transition:width 0.6s ease;}
+
+    /* Equity curve placeholder */
+    .chart-area{background:var(--bg3);border-radius:8px;height:180px;display:flex;align-items:center;justify-content:center;color:var(--text2);font-size:11px;overflow:hidden;position:relative;}
+    canvas.chart-canvas{width:100%;height:100%;}
+
+    /* Positions table */
+    .table-wrap{overflow-x:auto;}
+    table{width:100%;border-collapse:collapse;font-size:10px;}
+    th{color:var(--text2);font-weight:600;letter-spacing:0.8px;padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);}
+    td{padding:7px 10px;border-bottom:1px solid var(--border2);color:var(--text1);}
+    td.sym{color:var(--text0);font-weight:600;}
+    td.pos{color:var(--green);} td.neg{color:var(--red);}
+    tr:hover td{background:rgba(255,255,255,0.02);}
+
+    .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin 0.7s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+    .loaded{animation:fadeUp 0.3s ease;}
+
+    .loading-state{text-align:center;padding:60px 0;color:var(--text2);}
+    .error-state{text-align:center;padding:40px 0;color:var(--red);}
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="logo-icon">📊</div>
+      <div>
+        <div class="logo-title">Portfolio Risk</div>
+        <div class="logo-sub">INSTITUTIONAL DASHBOARD</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <a href="/dashboard" class="back-btn">← Dashboard</a>
+      <a href="/compounding-plan" class="nav-link">Compounding</a>
+      <a href="/rebalance" class="nav-link">Rebalancer</a>
+      <a href="/risk-of-ruin" class="nav-link">Risk of Ruin</a>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="page-title">Portfolio Risk Dashboard</div>
+    <div class="page-sub">Read-only institutional risk view — refreshes on load</div>
+
+    <div id="loadingState" class="loading-state"><div class="spinner"></div><div style="margin-top:12px;font-size:11px;">Computing risk metrics…</div></div>
+    <div id="errorState" class="error-state" style="display:none;"></div>
+
+    <div id="mainContent" style="display:none;">
+      <!-- Stat cards -->
+      <div class="stats-grid" id="statsGrid"></div>
+
+      <!-- Compliance flags -->
+      <div class="flags-section">
+        <div class="flags-title">COMPLIANCE FLAGS</div>
+        <div id="flagsList"></div>
+      </div>
+
+      <!-- Charts + Exposure -->
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">EQUITY CURVE (LAST 60 DAYS)</div>
+          <div class="chart-area"><canvas id="equityChart" class="chart-canvas"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">DRAWDOWN SERIES</div>
+          <div class="chart-area"><canvas id="ddChart" class="chart-canvas"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Strategy + Sector exposure -->
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">STRATEGY EXPOSURE</div>
+          <div id="strategyBars"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">SECTOR EXPOSURE</div>
+          <div id="sectorBars"></div>
+        </div>
+      </div>
+
+      <!-- Open positions -->
+      <div class="card" style="margin-bottom:20px;">
+        <div class="card-title">OPEN POSITIONS</div>
+        <div class="table-wrap"><table id="positionsTable">
+          <thead><tr><th>SYMBOL</th><th>STRATEGY</th><th>SECTOR</th><th>DIR</th><th>QTY</th><th>ENTRY</th><th>VALUE</th><th>EXP%</th><th>STOP</th><th>RISK ₹</th></tr></thead>
+          <tbody id="positionsBody"></tbody>
+        </table></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){if(!localStorage.getItem('access_token')){window.location.replace('/');} })();
+function _h(){const t=localStorage.getItem('access_token');return t?{'Authorization':'Bearer '+t}:{};}
+const API='';
+
+function fmt(v,d=0){return '₹'+(v||0).toLocaleString('en-IN',{maximumFractionDigits:d});}
+function pct(v,d=1){return (v||0).toFixed(d)+'%';}
+function colPnl(v){return v>=0?'var(--green)':'var(--red)';}
+
+function barRow(label,val,cap,color='var(--blue)',show_pct=true){
+  const p=Math.min(100,((val/cap)*100));
+  const valStr=show_pct?fmt(val)+' / '+fmt(cap):fmt(val);
+  return `<div class="bar-row">
+    <div class="bar-row-header"><span>${label}</span><span style="color:${color}">${valStr} (${p.toFixed(1)}%)</span></div>
+    <div class="bar-track"><div class="bar-fill" style="width:${p}%;background:${color};"></div></div>
+  </div>`;
+}
+
+function drawLineChart(canvasId, data, key, color, label){
+  const canvas=document.getElementById(canvasId);
+  if(!canvas||!data.length)return;
+  const ctx=canvas.getContext('2d');
+  const W=canvas.offsetWidth, H=canvas.offsetHeight;
+  canvas.width=W; canvas.height=H;
+  const vals=data.map(d=>d[key]);
+  const min=Math.min(...vals), max=Math.max(...vals);
+  const range=max-min||1;
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle=color; ctx.lineWidth=1.5; ctx.beginPath();
+  data.forEach((d,i)=>{
+    const x=10+(W-20)*i/(data.length-1);
+    const y=H-10-(H-20)*(d[key]-min)/range;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+  // gradient fill
+  const grad=ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,color+'33'); grad.addColorStop(1,color+'00');
+  ctx.fillStyle=grad; ctx.lineTo(W-10,H-10); ctx.lineTo(10,H-10); ctx.closePath(); ctx.fill();
+}
+
+async function load(){
+  try{
+    const r=await fetch(API+'/api/portfolio/risk-summary',{headers:_h()});
+    if(!r.ok)throw new Error(await r.text());
+    const d=await r.json();
+    render(d);
+  }catch(e){
+    document.getElementById('loadingState').style.display='none';
+    const el=document.getElementById('errorState');
+    el.style.display=''; el.textContent='Error: '+e.message;
+  }
+}
+
+function render(d){
+  document.getElementById('loadingState').style.display='none';
+  const mc=document.getElementById('mainContent');
+  mc.style.display=''; mc.classList.add('loaded');
+
+  // Stats
+  const cap=d.total_capital||100000;
+  const stats=[
+    ['TOTAL CAPITAL',fmt(d.total_capital),''],
+    ['CASH AVAILABLE',fmt(d.cash_available),(d.cash_available/cap*100).toFixed(1)+'% free'],
+    ['DEPLOYED',fmt(d.total_exposure),pct(d.exposure_pct)+' of capital'],
+    ['DRAWDOWN',pct(d.drawdown_pct,2),'peak '+fmt(d.peak_equity)],
+    ['WIN RATE',pct(d.win_rate_pct)+' ',''+d.winning_trades+'/'+d.total_trades+' trades'],
+    ['PROFIT FACTOR',(d.profit_factor||0).toFixed(2),'exp: '+fmt(d.expectancy,2)],
+  ];
+  document.getElementById('statsGrid').innerHTML=stats.map(([l,v,s])=>`
+    <div class="stat-card"><div class="stat-label">${l}</div><div class="stat-value">${v}</div><div class="stat-sub">${s}</div></div>
+  `).join('');
+
+  // Flags
+  const fl=document.getElementById('flagsList');
+  if(!d.compliance_flags||!d.compliance_flags.length){
+    fl.innerHTML='<div class="flag-ok">✓ All compliance checks passed</div>';
+  } else {
+    fl.innerHTML=d.compliance_flags.map(f=>`
+      <div class="flag ${f.severity}"><span class="flag-badge">${f.severity}</span><span>${f.rule}</span><span style="color:var(--text1)">${f.message}</span></div>
+    `).join('');
+  }
+
+  // Charts
+  setTimeout(()=>{
+    drawLineChart('equityChart',d.equity_curve,'equity','#4dabff','Equity');
+    drawLineChart('ddChart',d.drawdown_series,'drawdown_pct','#ff4d6d','DD%');
+  },100);
+
+  // Strategy bars
+  const totalCap=d.total_capital||100000;
+  const caps={DIVIDEND:30000,SWING:30000,MID_TERM:30000,INTRADAY:10000};
+  document.getElementById('strategyBars').innerHTML=
+    Object.entries(d.strategy_exposure||{}).map(([b,v])=>barRow(b,v,caps[b]||30000,'var(--blue)')).join('');
+
+  // Sector bars
+  const sectorMax=totalCap*0.3;
+  const colors=['#4dabff','#00ff9d','#f5c518','#c77dff','#ff8c42','#ff4d6d'];
+  document.getElementById('sectorBars').innerHTML=
+    Object.entries(d.sector_exposure||{}).sort((a,b)=>b[1]-a[1]).map(([s,v],i)=>
+      barRow(s,v,sectorMax,colors[i%colors.length])
+    ).join('');
+
+  // Positions table
+  const tb=document.getElementById('positionsBody');
+  if(!d.open_positions||!d.open_positions.length){
+    tb.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--text2);padding:20px;">No open positions</td></tr>';
+  } else {
+    tb.innerHTML=d.open_positions.map(p=>`<tr>
+      <td class="sym">${p.symbol}</td>
+      <td>${p.strategy}</td>
+      <td>${p.sector}</td>
+      <td style="color:${p.direction==='long'?'var(--green)':'var(--red)'}">${p.direction.toUpperCase()}</td>
+      <td>${p.quantity}</td>
+      <td>₹${(p.entry_price||0).toFixed(2)}</td>
+      <td>${fmt(p.market_value)}</td>
+      <td>${pct(p.exposure_pct)}</td>
+      <td>₹${(p.stop_price||0).toFixed(2)}</td>
+      <td>${fmt(p.risk_amount)}</td>
+    </tr>`).join('');
+  }
+}
+
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Compounding Plan — TradiqAI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root{--bg0:#060810;--bg1:#0b0f18;--bg2:#0f1420;--bg3:#141a27;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.04);--text0:#dde8f5;--text1:#8899bb;--text2:#44556a;--green:#00ff9d;--yellow:#f5c518;--orange:#ff8c42;--red:#ff4d6d;--blue:#4dabff;--purple:#c77dff;--font-mono:'JetBrains Mono',monospace;--font-head:'Syne',sans-serif;}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:var(--font-mono);background:var(--bg0);color:var(--text0);min-height:100vh;}
+    ::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-track{background:var(--bg1);} ::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:2px;}
+    .topbar{position:sticky;top:0;z-index:100;background:linear-gradient(180deg,var(--bg1) 0%,transparent 100%);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;}
+    .topbar-left{display:flex;align-items:center;gap:14px;}
+    .logo-icon{width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,#ff8c42,#f5c518);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+    .logo-title{font-family:var(--font-head);font-weight:800;font-size:17px;letter-spacing:-0.3px;}
+    .logo-sub{font-size:9px;color:var(--text2);letter-spacing:2px;}
+    .topbar-right{display:flex;align-items:center;gap:16px;}
+    .nav-link{color:var(--text1);text-decoration:none;font-size:11px;padding:6px 12px;border-radius:6px;border:1px solid var(--border);transition:all 0.15s;}
+    .nav-link:hover{color:var(--text0);border-color:rgba(255,255,255,0.15);}
+    .back-btn{background:rgba(77,171,255,0.1);border:1px solid rgba(77,171,255,0.3);color:var(--blue);border-radius:7px;padding:6px 14px;font-size:11px;font-family:var(--font-mono);cursor:pointer;text-decoration:none;}
+    .content{padding:22px 28px;max-width:1400px;margin:0 auto;}
+    .page-title{font-family:var(--font-head);font-size:24px;font-weight:800;margin-bottom:4px;}
+    .page-sub{font-size:11px;color:var(--text2);margin-bottom:22px;}
+
+    /* Progress banner */
+    .progress-banner{background:linear-gradient(135deg,rgba(245,197,24,0.1),rgba(255,140,66,0.1));border:1px solid rgba(245,197,24,0.25);border-radius:13px;padding:20px 24px;margin-bottom:22px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px;}
+    @media(max-width:800px){.progress-banner{grid-template-columns:1fr 1fr;}}
+    .pb-item .pb-label{font-size:9px;color:var(--text2);letter-spacing:1.5px;margin-bottom:6px;}
+    .pb-item .pb-value{font-size:22px;font-weight:700;}
+
+    /* Goal progress bar */
+    .goal-section{margin-bottom:22px;}
+    .goal-title{font-size:11px;color:var(--text2);letter-spacing:1px;margin-bottom:10px;}
+    .goal-track{background:rgba(255,255,255,0.05);border-radius:6px;height:12px;position:relative;overflow:hidden;}
+    .goal-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--yellow),var(--orange));transition:width 1s ease;}
+    .goal-label{display:flex;justify-content:space-between;font-size:9px;color:var(--text2);margin-top:6px;}
+
+    /* Scenario tabs */
+    .scenario-tabs{display:flex;gap:8px;margin-bottom:18px;}
+    .s-tab{background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:8px 16px;font-size:11px;font-family:var(--font-mono);cursor:pointer;color:var(--text2);transition:all 0.15s;}
+    .s-tab.active.conservative{background:rgba(0,255,157,0.1);border-color:rgba(0,255,157,0.3);color:var(--green);}
+    .s-tab.active.base{background:rgba(245,197,24,0.1);border-color:rgba(245,197,24,0.3);color:var(--yellow);}
+    .s-tab.active.aggressive{background:rgba(255,77,109,0.1);border-color:rgba(255,77,109,0.3);color:var(--red);}
+
+    /* Scenario detail */
+    .scenario-panel{display:none;}
+    .scenario-panel.active{display:block;animation:fadeUp 0.3s ease;}
+    .s-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
+    @media(max-width:800px){.s-stats{grid-template-columns:1fr 1fr;}}
+    .s-stat{background:linear-gradient(135deg,var(--bg1),var(--bg2));border-radius:10px;padding:14px 16px;border:1px solid var(--border2);}
+    .s-stat-label{font-size:9px;color:var(--text2);letter-spacing:1.2px;margin-bottom:6px;}
+    .s-stat-value{font-size:18px;font-weight:700;}
+
+    /* Projection table */
+    .card{background:linear-gradient(135deg,var(--bg1),var(--bg2));border-radius:13px;padding:18px 20px;border:1px solid var(--border2);margin-bottom:18px;}
+    .card-title{font-size:11px;color:var(--text2);letter-spacing:1px;margin-bottom:14px;font-weight:700;}
+    .table-wrap{overflow-x:auto;max-height:360px;}
+    table{width:100%;border-collapse:collapse;font-size:10px;}
+    th{color:var(--text2);font-weight:600;letter-spacing:0.8px;padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg2);}
+    th:first-child{text-align:left;}
+    td{padding:7px 10px;border-bottom:1px solid var(--border2);color:var(--text1);text-align:right;}
+    td:first-child{text-align:left;color:var(--text0);}
+    tr.milestone td{background:rgba(245,197,24,0.06);color:var(--yellow);}
+
+    /* Milestones */
+    .milestones-grid{display:flex;flex-wrap:wrap;gap:8px;}
+    .milestone-chip{background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:10px;}
+    .milestone-chip .m-label{font-weight:700;color:var(--yellow);}
+    .milestone-chip .m-month{color:var(--text2);font-size:9px;margin-top:2px;}
+
+    .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--yellow);border-radius:50%;animation:spin 0.7s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+    .loading-state{text-align:center;padding:60px 0;color:var(--text2);}
+    .error-state{text-align:center;padding:40px 0;color:var(--red);}
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="logo-icon">📈</div>
+      <div><div class="logo-title">Compounding Plan</div><div class="logo-sub">₹1L → ₹5L JOURNEY</div></div>
+    </div>
+    <div class="topbar-right">
+      <a href="/dashboard" class="back-btn">← Dashboard</a>
+      <a href="/risk-dashboard" class="nav-link">Risk</a>
+      <a href="/rebalance" class="nav-link">Rebalancer</a>
+      <a href="/risk-of-ruin" class="nav-link">Risk of Ruin</a>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="page-title">Capital Compounding Plan</div>
+    <div class="page-sub">Multi-scenario projection from ₹1,00,000 → ₹5,00,000</div>
+
+    <div id="loadingState" class="loading-state"><div class="spinner"></div><div style="margin-top:12px;font-size:11px;">Loading compounding data…</div></div>
+    <div id="errorState" class="error-state" style="display:none;"></div>
+    <div id="mainContent" style="display:none;">
+
+      <!-- Progress banner -->
+      <div class="progress-banner" id="progressBanner"></div>
+
+      <!-- Goal progress -->
+      <div class="goal-section">
+        <div class="goal-title">PROGRESS TOWARD ₹5,00,000</div>
+        <div class="goal-track"><div class="goal-fill" id="goalFill" style="width:0%"></div></div>
+        <div class="goal-label"><span id="goalLeft">₹1,00,000</span><span id="goalRight">₹5,00,000</span></div>
+      </div>
+
+      <!-- Milestones -->
+      <div class="card">
+        <div class="card-title">MILESTONES (BASE SCENARIO)</div>
+        <div class="milestones-grid" id="milestonesGrid"></div>
+      </div>
+
+      <!-- Scenario tabs -->
+      <div class="scenario-tabs">
+        <button class="s-tab conservative active" onclick="switchScenario('conservative',this)">Conservative (1.5%/mo)</button>
+        <button class="s-tab base" onclick="switchScenario('base',this)">Base (3%/mo)</button>
+        <button class="s-tab aggressive" onclick="switchScenario('aggressive',this)">Aggressive (5%/mo)</button>
+      </div>
+
+      <div id="spConservative" class="scenario-panel active"></div>
+      <div id="spBase" class="scenario-panel"></div>
+      <div id="spAggressive" class="scenario-panel"></div>
+    </div>
+  </div>
+
+<script>
+(function(){if(!localStorage.getItem('access_token')){window.location.replace('/');}})();
+function _h(){const t=localStorage.getItem('access_token');return t?{'Authorization':'Bearer '+t}:{};}
+const API='';
+let _data=null;
+
+function fmt(v){return '₹'+(v||0).toLocaleString('en-IN',{maximumFractionDigits:0});}
+
+function switchScenario(name, el){
+  document.querySelectorAll('.s-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.scenario-panel').forEach(p=>p.classList.remove('active'));
+  const cap=name.charAt(0).toUpperCase()+name.slice(1);
+  document.getElementById('sp'+cap).classList.add('active');
+}
+
+function renderScenario(name, s, containerId){
+  const c=document.getElementById(containerId);
+  const colorMap={conservative:'var(--green)',base:'var(--yellow)',aggressive:'var(--red)'};
+  const col=colorMap[name]||'var(--blue)';
+
+  c.innerHTML=`
+    <div class="s-stats">
+      <div class="s-stat"><div class="s-stat-label">MONTHLY RETURN</div><div class="s-stat-value" style="color:${col}">${s.monthly_return_pct}%</div></div>
+      <div class="s-stat"><div class="s-stat-label">12M PROJECTION</div><div class="s-stat-value">${fmt(s.projected_capital_12m)}</div></div>
+      <div class="s-stat"><div class="s-stat-label">24M PROJECTION</div><div class="s-stat-value">${fmt(s.projected_capital_24m)}</div></div>
+      <div class="s-stat"><div class="s-stat-label">MONTHS TO ₹5L</div><div class="s-stat-value" style="color:${col}">${s.months_to_target||'>36'}</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">MONTHLY PROJECTION TABLE</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>MONTH</th><th>CAPITAL</th><th>MONTHLY PROFIT</th><th>CUMULATIVE GAIN</th><th>RISK BUDGET</th></tr></thead>
+        <tbody>${s.monthly_data.map(m=>`<tr${m.capital>=500000?' class="milestone"':''}>
+          <td>M${m.month}</td><td>${fmt(m.capital)}</td><td style="color:var(--green)">+${fmt(m.monthly_profit)}</td>
+          <td>+${fmt(m.cumulative_profit)}</td><td>${fmt(m.monthly_risk_budget)}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>
+  `;
+}
+
+async function load(){
+  try{
+    const r=await fetch(API+'/api/plan/compounding',{headers:_h()});
+    if(!r.ok)throw new Error(await r.text());
+    _data=await r.json();
+    render(_data);
+  }catch(e){
+    document.getElementById('loadingState').style.display='none';
+    const el=document.getElementById('errorState');
+    el.style.display=''; el.textContent='Error: '+e.message;
+  }
+}
+
+function render(d){
+  document.getElementById('loadingState').style.display='none';
+  document.getElementById('mainContent').style.display='';
+
+  const ap=d.actual_progress;
+  document.getElementById('progressBanner').innerHTML=`
+    <div class="pb-item"><div class="pb-label">CURRENT CAPITAL</div><div class="pb-value" style="color:var(--yellow)">${fmt(ap.current_capital)}</div></div>
+    <div class="pb-item"><div class="pb-label">REALIZED P&L</div><div class="pb-value" style="color:${ap.realized_pnl>=0?'var(--green)':'var(--red)'}">${ap.realized_pnl>=0?'+':''}${fmt(ap.realized_pnl)}</div></div>
+    <div class="pb-item"><div class="pb-label">MONTHS ELAPSED</div><div class="pb-value">${ap.months_elapsed}</div></div>
+    <div class="pb-item"><div class="pb-label">AVG MONTHLY RETURN</div><div class="pb-value" style="color:${ap.monthly_avg_return_pct>=3?'var(--green)':'var(--yellow)'}">${ap.monthly_avg_return_pct.toFixed(2)}%</div></div>
+  `;
+
+  document.getElementById('goalFill').style.width=ap.milestone_pct+'%';
+  document.getElementById('goalLeft').textContent=fmt(ap.current_capital);
+
+  // Milestones
+  document.getElementById('milestonesGrid').innerHTML=d.milestones.map(m=>`
+    <div class="milestone-chip">
+      <div class="m-label">${m.label}</div>
+      <div class="m-month">${m.base_month?'Month '+m.base_month:'>36 months'}</div>
+    </div>
+  `).join('');
+
+  // Scenario panels
+  renderScenario('conservative', d.scenarios.conservative, 'spConservative');
+  renderScenario('base', d.scenarios.base, 'spBase');
+  renderScenario('aggressive', d.scenarios.aggressive, 'spAggressive');
+}
+
+load();
+</script>
+</body>
+</html>

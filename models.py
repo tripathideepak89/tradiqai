@@ -291,3 +291,48 @@ class PortfolioMetrics(Base):
             f"<PortfolioMetrics capital=₹{self.total_capital:,.0f} "
             f"drawdown={self.drawdown_pct:.1f}% mode={self.risk_mode}>"
         )
+
+
+class RebalanceRun(Base):
+    """Stores results of each monthly rebalancer run (recommendations only, no auto-trading)."""
+    __tablename__ = "rebalance_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    run_date = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    lookback_days = Column(Integer, default=30)
+
+    # JSON: {bucket: score, ...}
+    bucket_scores = Column(Text, nullable=True)
+    # JSON: {bucket: pct, ...}
+    current_allocations = Column(Text, nullable=True)
+    # JSON: {bucket: pct, ...}
+    recommended_allocations = Column(Text, nullable=True)
+    # JSON: [{bucket, old_pct, new_pct, delta_pct, reason}, ...]
+    changes = Column(Text, nullable=True)
+
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    def __repr__(self):
+        return f"<RebalanceRun id={self.id} date={self.run_date}>"
+
+
+class AllocationTargets(Base):
+    """Stores AAE weekly allocation targets (latest row = current targets)."""
+    __tablename__ = "allocation_targets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    computed_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    regime = Column(String(20), default="NEUTRAL")
+    lookback_days = Column(Integer, default=30)
+
+    # JSON: {bucket: target_pct, ...}
+    targets = Column(Text, nullable=False)
+    # JSON: {bucket: delta_pct, ...}
+    deltas = Column(Text, nullable=True)
+
+    total_allocated_pct = Column(Float, default=100.0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    def __repr__(self):
+        return f"<AllocationTargets id={self.id} regime={self.regime} at={self.computed_at}>"

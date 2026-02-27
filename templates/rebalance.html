@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Monthly Rebalancer — TradiqAI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root{--bg0:#060810;--bg1:#0b0f18;--bg2:#0f1420;--bg3:#141a27;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.04);--text0:#dde8f5;--text1:#8899bb;--text2:#44556a;--green:#00ff9d;--yellow:#f5c518;--orange:#ff8c42;--red:#ff4d6d;--blue:#4dabff;--purple:#c77dff;--font-mono:'JetBrains Mono',monospace;--font-head:'Syne',sans-serif;}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:var(--font-mono);background:var(--bg0);color:var(--text0);min-height:100vh;}
+    ::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-track{background:var(--bg1);} ::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:2px;}
+    .topbar{position:sticky;top:0;z-index:100;background:linear-gradient(180deg,var(--bg1) 0%,transparent 100%);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;}
+    .topbar-left{display:flex;align-items:center;gap:14px;}
+    .logo-icon{width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,#00ff9d,#4dabff);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+    .logo-title{font-family:var(--font-head);font-weight:800;font-size:17px;letter-spacing:-0.3px;}
+    .logo-sub{font-size:9px;color:var(--text2);letter-spacing:2px;}
+    .topbar-right{display:flex;align-items:center;gap:16px;}
+    .nav-link{color:var(--text1);text-decoration:none;font-size:11px;padding:6px 12px;border-radius:6px;border:1px solid var(--border);transition:all 0.15s;}
+    .nav-link:hover{color:var(--text0);border-color:rgba(255,255,255,0.15);}
+    .back-btn{background:rgba(77,171,255,0.1);border:1px solid rgba(77,171,255,0.3);color:var(--blue);border-radius:7px;padding:6px 14px;font-size:11px;font-family:var(--font-mono);cursor:pointer;text-decoration:none;}
+    .content{padding:22px 28px;max-width:1400px;margin:0 auto;}
+    .page-title{font-family:var(--font-head);font-size:24px;font-weight:800;margin-bottom:4px;}
+    .page-sub{font-size:11px;color:var(--text2);margin-bottom:22px;}
+
+    .controls-row{display:flex;align-items:center;gap:12px;margin-bottom:22px;flex-wrap:wrap;}
+    .ctrl-label{font-size:10px;color:var(--text2);}
+    select,input[type=number]{background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:7px;padding:6px 12px;color:var(--text0);font-size:11px;font-family:var(--font-mono);outline:none;}
+    .run-btn{background:rgba(0,255,157,0.15);border:1px solid rgba(0,255,157,0.4);color:var(--green);border-radius:8px;padding:8px 20px;font-size:11px;font-family:var(--font-mono);cursor:pointer;font-weight:700;transition:all 0.15s;}
+    .run-btn:hover{background:rgba(0,255,157,0.25);}
+    .run-btn:disabled{opacity:0.4;pointer-events:none;}
+
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;}
+    @media(max-width:900px){.two-col{grid-template-columns:1fr;}}
+    .card{background:linear-gradient(135deg,var(--bg1),var(--bg2));border-radius:13px;padding:18px 20px;border:1px solid var(--border2);margin-bottom:18px;}
+    .card-title{font-size:11px;color:var(--text2);letter-spacing:1px;margin-bottom:14px;font-weight:700;}
+
+    /* Score table */
+    table{width:100%;border-collapse:collapse;font-size:10px;}
+    th{color:var(--text2);font-weight:600;letter-spacing:0.8px;padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);}
+    th:first-child{text-align:left;}
+    td{padding:8px 10px;border-bottom:1px solid var(--border2);color:var(--text1);text-align:right;}
+    td:first-child{text-align:left;color:var(--text0);font-weight:600;}
+
+    /* Score bar */
+    .score-bar-wrap{display:flex;align-items:center;gap:8px;}
+    .score-bar-track{flex:1;background:rgba(255,255,255,0.06);border-radius:3px;height:6px;overflow:hidden;}
+    .score-bar-fill{height:100%;border-radius:3px;}
+
+    /* Allocation comparison */
+    .alloc-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:11px;}
+    .alloc-bucket{width:80px;color:var(--text0);font-weight:600;}
+    .alloc-bars{flex:1;}
+    .alloc-bar-row{display:flex;align-items:center;gap:6px;margin-bottom:2px;font-size:9px;}
+    .alloc-bar-label{width:50px;color:var(--text2);}
+    .alloc-bar-track{flex:1;background:rgba(255,255,255,0.05);border-radius:2px;height:5px;overflow:hidden;}
+    .alloc-bar-fill-cur{height:100%;border-radius:2px;background:rgba(255,255,255,0.2);}
+    .alloc-bar-fill-rec{height:100%;border-radius:2px;}
+    .alloc-pct{width:35px;text-align:right;color:var(--text1);}
+
+    /* Changes */
+    .change-item{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:8px;margin-bottom:6px;font-size:11px;}
+    .change-item.up{background:rgba(0,255,157,0.08);border:1px solid rgba(0,255,157,0.2);}
+    .change-item.down{background:rgba(255,77,109,0.08);border:1px solid rgba(255,77,109,0.2);}
+    .change-bucket{font-weight:700;width:80px;}
+    .change-delta{font-weight:700;}
+    .change-item.up .change-delta{color:var(--green);}
+    .change-item.down .change-delta{color:var(--red);}
+    .change-reason{color:var(--text2);font-size:10px;}
+    .no-change{color:var(--text2);font-size:11px;padding:12px 0;}
+
+    .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin 0.7s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+    .loading-state{text-align:center;padding:60px 0;color:var(--text2);}
+    .error-state{text-align:center;padding:40px 0;color:var(--red);}
+    .notice{background:rgba(245,197,24,0.08);border:1px solid rgba(245,197,24,0.2);border-radius:8px;padding:12px 16px;font-size:11px;color:var(--yellow);margin-bottom:18px;}
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="logo-icon">⚖️</div>
+      <div><div class="logo-title">Monthly Rebalancer</div><div class="logo-sub">RECOMMENDATIONS ONLY</div></div>
+    </div>
+    <div class="topbar-right">
+      <a href="/dashboard" class="back-btn">← Dashboard</a>
+      <a href="/risk-dashboard" class="nav-link">Risk</a>
+      <a href="/compounding-plan" class="nav-link">Compounding</a>
+      <a href="/risk-of-ruin" class="nav-link">Risk of Ruin</a>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="page-title">Monthly Rebalancer</div>
+    <div class="page-sub">Strategy performance scoring → allocation recommendations</div>
+
+    <div class="notice">⚠️ This tool generates recommendations only. No orders are placed automatically. Review and apply manually.</div>
+
+    <div class="controls-row">
+      <span class="ctrl-label">Lookback period:</span>
+      <select id="lookback"><option value="30" selected>30 days</option><option value="60">60 days</option><option value="90">90 days</option></select>
+      <button class="run-btn" id="runBtn" onclick="runRebalance()">▶ Run Rebalancer</button>
+      <button class="run-btn" style="background:rgba(77,171,255,0.1);border-color:rgba(77,171,255,0.3);color:var(--blue);" onclick="loadLatest()">↺ Load Latest</button>
+    </div>
+
+    <div id="loadingState" class="loading-state" style="display:none;"><div class="spinner"></div><div style="margin-top:12px;font-size:11px;">Running rebalancer…</div></div>
+    <div id="errorState" class="error-state" style="display:none;"></div>
+    <div id="mainContent" style="display:none;"></div>
+  </div>
+
+<script>
+(function(){if(!localStorage.getItem('access_token')){window.location.replace('/');}})();
+function _h(){const t=localStorage.getItem('access_token');return t?{'Authorization':'Bearer '+t}:{};}
+const API='';
+
+function scoreColor(s){if(s>=70)return 'var(--green)';if(s>=40)return 'var(--yellow)';return 'var(--red)';}
+function deltaColor(d){return d>0?'var(--green)':d<0?'var(--red)':'var(--text2)';}
+
+function render(d){
+  const mc=document.getElementById('mainContent');
+  mc.style.display=''; mc.innerHTML='';
+  mc.style.animation='fadeUp 0.3s ease';
+
+  // Scores table
+  const scoresHtml=Object.entries(d.bucket_scores).map(([b,s])=>`
+    <tr>
+      <td>${b}</td>
+      <td><div class="score-bar-wrap">
+        <div class="score-bar-track"><div class="score-bar-fill" style="width:${s.score}%;background:${scoreColor(s.score)};"></div></div>
+        <span style="width:35px;text-align:right;color:${scoreColor(s.score)}">${s.score.toFixed(0)}</span>
+      </div></td>
+      <td>${s.trade_count}</td>
+      <td style="color:${s.win_rate_pct>=50?'var(--green)':'var(--red)'}">${(s.win_rate_pct||0).toFixed(1)}%</td>
+      <td>${(s.profit_factor||0).toFixed(2)}</td>
+      <td style="color:${s.annualised_return_pct>=0?'var(--green)':'var(--red)'}">${(s.annualised_return_pct||0).toFixed(1)}%</td>
+      <td style="color:var(--red)">${(s.max_drawdown_pct||0).toFixed(1)}%</td>
+    </tr>
+  `).join('');
+
+  // Allocation comparison
+  const allocHtml=Object.entries(d.recommended_allocations).map(([b,rec])=>{
+    const cur=d.current_allocations[b]||0;
+    const delta=rec-cur;
+    const color=rec>=35?'var(--orange)':rec>=25?'var(--blue)':'var(--green)';
+    return `<div class="alloc-row">
+      <div class="alloc-bucket">${b}</div>
+      <div class="alloc-bars">
+        <div class="alloc-bar-row"><span class="alloc-bar-label">Current</span><div class="alloc-bar-track"><div class="alloc-bar-fill-cur" style="width:${cur}%"></div></div><span class="alloc-pct">${cur.toFixed(1)}%</span></div>
+        <div class="alloc-bar-row"><span class="alloc-bar-label">Recommended</span><div class="alloc-bar-track"><div class="alloc-bar-fill-rec" style="width:${rec}%;background:${color}"></div></div><span class="alloc-pct" style="color:${color}">${rec.toFixed(1)}%</span></div>
+      </div>
+      <span style="width:40px;text-align:right;font-size:10px;color:${deltaColor(delta)};font-weight:700;">${delta>0?'+':''}${delta.toFixed(1)}%</span>
+    </div>`;
+  }).join('');
+
+  // Changes
+  let changesHtml='';
+  if(!d.changes||!d.changes.length){
+    changesHtml='<div class="no-change">No allocation changes recommended this cycle.</div>';
+  } else {
+    changesHtml=d.changes.map(c=>`
+      <div class="change-item ${c.delta_pct>0?'up':'down'}">
+        <span class="change-bucket">${c.bucket}</span>
+        <span class="change-delta">${c.delta_pct>0?'+':''}${c.delta_pct.toFixed(1)}%</span>
+        <span>${c.old_pct.toFixed(1)}% → ${c.new_pct.toFixed(1)}%</span>
+        <span class="change-reason">${c.reason}</span>
+      </div>
+    `).join('');
+  }
+
+  mc.innerHTML=`
+    <div class="card">
+      <div class="card-title">STRATEGY SCORES — ${d.lookback_days}-DAY WINDOW</div>
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th>BUCKET</th><th>SCORE / 100</th><th>TRADES</th><th>WIN RATE</th><th>PROFIT FACTOR</th><th>ANN. RETURN</th><th>MAX DD</th></tr></thead>
+        <tbody>${scoresHtml}</tbody>
+      </table></div>
+    </div>
+    <div class="two-col">
+      <div class="card"><div class="card-title">ALLOCATION COMPARISON</div>${allocHtml}</div>
+      <div class="card"><div class="card-title">RECOMMENDED CHANGES</div>${changesHtml}</div>
+    </div>
+    <div class="card"><div class="card-title">NOTES</div><div style="font-size:11px;color:var(--text1);">${d.notes}</div></div>
+  `;
+}
+
+async function runRebalance(){
+  const btn=document.getElementById('runBtn');
+  btn.disabled=true;
+  document.getElementById('loadingState').style.display='';
+  document.getElementById('errorState').style.display='none';
+  document.getElementById('mainContent').style.display='none';
+  try{
+    const lookback=parseInt(document.getElementById('lookback').value);
+    const r=await fetch(API+'/api/rebalance/run',{method:'POST',headers:{'Content-Type':'application/json',..._h()},body:JSON.stringify({lookback_days:lookback})});
+    if(!r.ok)throw new Error(await r.text());
+    const d=await r.json();
+    document.getElementById('loadingState').style.display='none';
+    render(d);
+  }catch(e){
+    document.getElementById('loadingState').style.display='none';
+    const el=document.getElementById('errorState');
+    el.style.display=''; el.textContent='Error: '+e.message;
+  }finally{btn.disabled=false;}
+}
+
+async function loadLatest(){
+  document.getElementById('loadingState').style.display='';
+  document.getElementById('errorState').style.display='none';
+  document.getElementById('mainContent').style.display='none';
+  try{
+    const r=await fetch(API+'/api/rebalance/latest',{headers:_h()});
+    if(!r.ok)throw new Error(await r.text());
+    const d=await r.json();
+    document.getElementById('loadingState').style.display='none';
+    if(d.message){
+      document.getElementById('mainContent').style.display='';
+      document.getElementById('mainContent').innerHTML=`<div style="color:var(--text2);font-size:11px;padding:20px 0">${d.message}</div>`;
+    } else {
+      render(d);
+    }
+  }catch(e){
+    document.getElementById('loadingState').style.display='none';
+    const el=document.getElementById('errorState');
+    el.style.display=''; el.textContent='Error: '+e.message;
+  }
+}
+
+loadLatest();
+</script>
+</body>
+</html>
