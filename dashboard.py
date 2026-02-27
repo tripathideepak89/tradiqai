@@ -1116,6 +1116,7 @@ HTML_TEMPLATE = """
                 <h1>🚀 TradiqAI - Live Dashboard</h1>
                 <div style="display: flex; align-items: center; gap: 15px;">
                     <span id="userInfo" style="color: #667eea; font-weight: bold;"></span>
+                    <a href="/dividend-radar" target="_blank" style="padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">📡 Dividend Radar</a>
                     <button onclick="logout()" style="padding: 8px 16px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">🔓 Logout</button>
                 </div>
             </div>
