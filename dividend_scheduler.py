@@ -356,18 +356,13 @@ class DividendRadarScheduler:
 #  API ENDPOINTS  (FastAPI — plug into your api.py)
 # ─────────────────────────────────────────────
 
-def register_dre_routes(app, get_db):
+def register_dre_routes(app, get_db, get_user=None):
     """
     Register DRE API endpoints with your existing FastAPI app.
 
-    In your api.py, add:
-        from dividend_scheduler import register_dre_routes
-        register_dre_routes(app, get_db)
-
-    Then your frontend / dashboard can call:
-        GET /api/dividends/upcoming
-        GET /api/dividends/signals
-        POST /api/dividends/refresh
+    Pass get_user to require JWT authentication on all DRE routes:
+        from tradiqai_supabase_auth import get_current_user
+        register_dre_routes(app, get_db, get_current_user)
     """
     try:
         from fastapi import Depends
@@ -379,8 +374,12 @@ def register_dre_routes(app, get_db):
     import decimal as _decimal
     import datetime as _datetime
 
+    # If no auth function provided, use a passthrough so routes still work
+    def _no_auth():
+        return {}
+    _auth = get_user or _no_auth
+
     def _serialize(obj):
-        """Convert psycopg2 non-JSON types to JSON-safe Python types."""
         if isinstance(obj, _decimal.Decimal):
             return float(obj)
         if isinstance(obj, (_datetime.date, _datetime.datetime)):
@@ -391,7 +390,7 @@ def register_dre_routes(app, get_db):
         return [{c: _serialize(v) for c, v in zip(cols, r)} for r in rows]
 
     @app.get("/api/dividends/upcoming")
-    def get_upcoming_dividends(db=Depends(get_db)):
+    def get_upcoming_dividends(db=Depends(get_db), _=Depends(_auth)):
         """Return upcoming dividends with DRE scores for the Radar UI."""
         sql = """
             SELECT
@@ -416,7 +415,7 @@ def register_dre_routes(app, get_db):
         return JSONResponse(_rows_to_json(cols, rows))
 
     @app.get("/api/dividends/signals")
-    def get_entry_signals(db=Depends(get_db)):
+    def get_entry_signals(db=Depends(get_db), _=Depends(_auth)):
         """Return only stocks with active entry signals."""
         sql = """
             SELECT *
@@ -432,7 +431,7 @@ def register_dre_routes(app, get_db):
         return JSONResponse(_rows_to_json(cols, rows))
 
     @app.post("/api/dividends/refresh")
-    def trigger_refresh():
+    def trigger_refresh(_=Depends(_auth)):
         """Manually trigger a DRE pipeline run (admin use)."""
         try:
             scheduler = DividendRadarScheduler()

@@ -878,6 +878,20 @@
 
 <script>
 /* ═══════════════════════════════════════════════════
+   AUTH GUARD — redirect to login if no token
+═══════════════════════════════════════════════════ */
+(function() {
+  if (!localStorage.getItem('access_token')) {
+    window.location.replace('/');
+  }
+})();
+
+function _authHeaders() {
+  const t = localStorage.getItem('access_token');
+  return t ? { 'Authorization': 'Bearer ' + t } : {};
+}
+
+/* ═══════════════════════════════════════════════════
    CONFIG — change API_BASE to match your server
 ═══════════════════════════════════════════════════ */
 const API_BASE = '';   // empty = same origin. e.g. 'http://localhost:8000'
@@ -899,7 +913,8 @@ async function loadData() {
   btn.textContent = '⟳ Loading…';
 
   try {
-    const res = await fetch(`${API_BASE}/api/dividends/upcoming`);
+    const res = await fetch(`${API_BASE}/api/dividends/upcoming`, { headers: _authHeaders() });
+    if (res.status === 401) { window.location.replace('/'); return; }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     ALL_DATA = await res.json();
     updateStats();
@@ -1208,7 +1223,8 @@ function copyAlert(idx) {
 async function loadSignals() {
   const grid = document.getElementById('signals-grid');
   try {
-    const res  = await fetch(`${API_BASE}/api/dividends/signals`);
+    const res  = await fetch(`${API_BASE}/api/dividends/signals`, { headers: _authHeaders() });
+    if (res.status === 401) { window.location.replace('/'); return; }
     const data = res.ok ? await res.json() : ALL_DATA.filter(d => d.entry_signal && !d.is_trap);
     renderSignalCards(data);
   } catch {
@@ -1269,7 +1285,7 @@ function runBacktest() {
 
   fetch(`${API_BASE}/api/dividends/backtest`, {
     method: 'POST',
-    headers: {'Content-Type':'application/json'},
+    headers: {'Content-Type':'application/json', ..._authHeaders()},
     body: JSON.stringify(cfg)
   })
   .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))

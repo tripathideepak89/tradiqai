@@ -80,18 +80,22 @@ def _get_dre_db():
 
 try:
     from dividend_scheduler import register_dre_routes
-    register_dre_routes(app, _get_dre_db)
-    logger.info("✅ DRE API routes registered")
+    from tradiqai_supabase_auth import get_current_user as _dre_get_user
+    register_dre_routes(app, _get_dre_db, _dre_get_user)
+    logger.info("✅ DRE API routes registered (JWT protected)")
 except Exception as _dre_err:
     logger.warning(f"⚠️ DRE routes not loaded: {_dre_err}")
 
 @app.get("/dividend-radar")
 async def dividend_radar_page():
-    """Serve the Dividend Radar Engine dashboard."""
+    """Serve the Dividend Radar Engine dashboard (auth enforced client-side)."""
     try:
         with open("templates/dividend_radar.html", "r", encoding="utf-8") as f:
             html = f.read()
-        return HTMLResponse(content=html)
+        return HTMLResponse(
+            content=html,
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate"}
+        )
     except FileNotFoundError:
         return HTMLResponse("<h2>Dividend Radar template not found.</h2>", status_code=404)
 
@@ -1116,7 +1120,7 @@ HTML_TEMPLATE = """
                 <h1>🚀 TradiqAI - Live Dashboard</h1>
                 <div style="display: flex; align-items: center; gap: 15px;">
                     <span id="userInfo" style="color: #667eea; font-weight: bold;"></span>
-                    <a href="/dividend-radar" target="_blank" style="padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">📡 Dividend Radar</a>
+                    <a href="/dividend-radar" style="padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">📡 Dividend Radar</a>
                     <button onclick="logout()" style="padding: 8px 16px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">🔓 Logout</button>
                 </div>
             </div>
