@@ -564,45 +564,82 @@ class TradingSystem:
                 
                 should_exit = False
                 exit_reason = ""
-                
+
                 # Determine if LONG or SHORT
                 is_long = trade.direction == TradeDirection.LONG
-                
-                # Check target hit
+
+                # Read product type stamped at entry (MIS = intraday, CNC = swing)
+                trade_product = "MIS"
+                if trade.notes and "product:CNC" in trade.notes:
+                    trade_product = "CNC"
+
+                # Check target hit (applies to both MIS and CNC)
                 if trade.target_price:
                     target_hit = (current_price >= trade.target_price) if is_long else (current_price <= trade.target_price)
                     if target_hit:
                         should_exit = True
                         exit_reason = f"TARGET HIT at Rs{current_price:.2f} (target Rs{trade.target_price:.2f})"
                         logger.info(f"[EXIT] {trade.symbol} {exit_reason}")
-                
-                # Check stop loss hit
+
+                # Check stop loss hit (applies to both)
                 if not should_exit and trade.stop_price:
                     stop_hit = (current_price <= trade.stop_price) if is_long else (current_price >= trade.stop_price)
                     if stop_hit:
                         should_exit = True
                         exit_reason = f"STOP LOSS at Rs{current_price:.2f} (SL Rs{trade.stop_price:.2f})"
                         logger.warning(f"[EXIT] {trade.symbol} {exit_reason}")
-                
-                # Check end of day
-                if not should_exit and is_eod:
+
+                # MIS: force close at end of day
+                if not should_exit and trade_product == "MIS" and is_eod:
                     should_exit = True
-                    exit_reason = f"END OF DAY EXIT at Rs{current_price:.2f}"
+                    exit_reason = f"EOD SQUAREOFF (MIS) at Rs{current_price:.2f}"
                     logger.info(f"[EXIT] {trade.symbol} {exit_reason}")
-                
+
+                # CNC swing exits (no EOD force, but time-based limits)
+                if not should_exit and trade_product == "CNC" and trade.entry_timestamp:
+                    try:
+                        entry_ts = trade.entry_timestamp
+                        if entry_ts.tzinfo is None:
+                            from utils.timezone import IST
+                            entry_ts = entry_ts.replace(tzinfo=IST)
+                        hold_days = (now_ist() - entry_ts).days
+
+                        # Rule 1: max 3 calendar days
+                        if hold_days >= 3:
+                            should_exit = True
+                            exit_reason = f"MAX SWING HOLD (3 days) at Rs{current_price:.2f}"
+                            logger.info(f"[EXIT] {trade.symbol} {exit_reason}")
+
+                        # Rule 2: time-based stop — still in loss after 2 days
+                        if not should_exit and hold_days >= 2 and current_price <= trade.entry_price:
+                            should_exit = True
+                            exit_reason = f"TIME STOP — no gain after 2 days at Rs{current_price:.2f}"
+                            logger.info(f"[EXIT] {trade.symbol} {exit_reason}")
+
+                        # Rule 3: gap down below stop at market open (first 15 min)
+                        current_hour = now_ist().hour
+                        current_min = now_ist().minute
+                        is_market_open_window = (current_hour == 9 and current_min <= 30)
+                        if not should_exit and is_market_open_window and current_price < trade.stop_price:
+                            should_exit = True
+                            exit_reason = f"GAP DOWN BELOW STOP at Rs{current_price:.2f}"
+                            logger.warning(f"[EXIT] {trade.symbol} {exit_reason}")
+                    except Exception as swing_err:
+                        logger.warning(f"Swing exit check error for {trade.symbol}: {swing_err}")
+
                 # Place exit order
                 if should_exit:
                     # Determine exit transaction type (opposite of entry)
                     transaction_type = TransactionType.SELL if is_long else TransactionType.BUY
-                    logger.info(f"Placing {transaction_type.value} order for {trade.symbol}: {trade.quantity} shares @ market")
-                    
-                    # Place market exit order
+                    logger.info(f"Placing {transaction_type.value} order for {trade.symbol}: {trade.quantity} shares @ market [{trade_product}]")
+
+                    # Place market exit order using same product as entry
                     exit_order = await self.broker.place_order(
                         symbol=trade.symbol,
                         quantity=trade.quantity,
                         order_type=OrderType.MARKET,
                         transaction_type=transaction_type,
-                        product="MIS"
+                        product=trade_product
                     )
                     
                     if exit_order and exit_order.status != "REJECTED":

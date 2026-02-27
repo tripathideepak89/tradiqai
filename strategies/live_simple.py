@@ -193,6 +193,15 @@ class LiveSimpleStrategy(BaseStrategy):
                 )
                 return None
             
+            # ── Intraday vs Swing classification ────────────────────────
+            # MIS only when: day range > 1.2% (high volatility) AND
+            #   strong directional momentum (price change >= 1.5%)
+            # Otherwise default to CNC (swing, hold up to 3 days)
+            day_range_pct = ((high - low) / open_price * 100) if open_price > 0 else 0
+            is_high_volatility = day_range_pct >= 1.2
+            is_strong_momentum = price_change_pct >= 1.5
+            product = "MIS" if (is_high_volatility and is_strong_momentum) else "CNC"
+
             # Create signal
             signal = Signal(
                 symbol=symbol,
@@ -203,17 +212,19 @@ class LiveSimpleStrategy(BaseStrategy):
                 quantity=1,  # Placeholder - risk engine will calculate
                 confidence=confidence,
                 reason=f"Momentum: +{price_change_pct:.1f}%, R:R={risk_reward_ratio:.2f}:1, Target={target_type}",
-                timestamp=datetime.now()
+                timestamp=datetime.now(),
+                product=product
             )
-            
+
             logger.info("=" * 80)
-            logger.info(f"✅ SIGNAL APPROVED: {symbol}")
+            logger.info(f"✅ SIGNAL APPROVED: {symbol} [{product}]")
             logger.info(f"   Entry: Rs{entry_price:.2f}")
             logger.info(f"   Stop:  Rs{stop_loss:.2f} (-{stop_loss_pct:.1f}%, Risk=Rs{risk:.2f})")
             logger.info(f"   Target: Rs{target:.2f} (+{((target-entry_price)/entry_price*100):.1f}%, Reward=Rs{reward:.2f})")
             logger.info(f"   R:R Ratio: {risk_reward_ratio:.2f}:1 {'✅' if risk_reward_ratio >= 1.5 else '⚠️'}")
             logger.info(f"   Target Type: {target_type}")
             logger.info(f"   Confidence: {confidence:.2f}")
+            logger.info(f"   Product: {product} (range={day_range_pct:.2f}%, mom={price_change_pct:.2f}%)")
             logger.info("=" * 80)
             
             return signal

@@ -27,6 +27,7 @@ class Signal:
     confidence: float  # 0-1
     reason: str
     timestamp: datetime
+    product: str = "CNC"          # CNC = delivery/swing, MIS = intraday squareoff
     direction: Optional['SignalDirection'] = None  # Optional for compatibility
     
     def to_dict(self) -> Dict:

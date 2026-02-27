@@ -278,15 +278,17 @@ class OrderManager:
             
             # 5. Place actual order
             direction = TradeDirection.LONG if signal.action == "BUY" else TradeDirection.SHORT
-            
+            trade_product = getattr(signal, 'product', 'CNC')  # CNC default = swing
+
             order = await self.broker.place_order(
                 symbol=signal.symbol,
                 transaction_type=TransactionType.BUY if signal.action == "BUY" else TransactionType.SELL,
                 quantity=proper_quantity,
                 order_type=OrderType.LIMIT,
                 price=signal.entry_price,
-                product="MIS"  # Intraday for now
+                product=trade_product
             )
+            logger.info(f"Order product type: {trade_product} for {signal.symbol}")
             
             # 5a. Handle rejected orders - save to database with reason
             if order.status == OrderStatus.REJECTED:
@@ -325,7 +327,7 @@ class OrderManager:
                 )
                 return None
             
-            # 6. Create trade record
+            # 6. Create trade record — stamp product type in notes for exit logic
             trade = Trade(
                 symbol=signal.symbol,
                 strategy_name=strategy_name,
@@ -337,6 +339,7 @@ class OrderManager:
                 risk_amount=abs(signal.entry_price - signal.stop_loss) * proper_quantity,
                 broker_order_id=order.order_id,
                 status=TradeStatus.PENDING,
+                notes=f"product:{trade_product}",
                 risk_reward_ratio=abs(signal.target - signal.entry_price) / abs(signal.entry_price - signal.stop_loss)
             )
             
