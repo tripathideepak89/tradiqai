@@ -1111,10 +1111,52 @@ HTML_TEMPLATE = """
         .modal-body {
             padding: 25px;
         }
+
+        /* ⚠️ Manual approval banner */
+        @keyframes approval-pulse {
+            0%, 100% { border-color: #ef4444; box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+            50%       { border-color: #fca5a5; box-shadow: 0 0 0 6px rgba(239,68,68,0); }
+        }
+        #approvalBanner {
+            display: none;
+            background: #450a0a;
+            border: 2px solid #ef4444;
+            border-radius: 8px;
+            padding: 14px 20px;
+            margin-bottom: 16px;
+            animation: approval-pulse 2s ease-in-out infinite;
+        }
+        #approvalBanner .approval-title {
+            color: #fca5a5;
+            font-size: 15px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+        #approvalBanner .approval-list {
+            color: #fecaca;
+            font-size: 13px;
+            line-height: 1.7;
+            margin-left: 28px;
+        }
+        #approvalBanner .approval-hint {
+            color: #f87171;
+            font-size: 12px;
+            margin-top: 8px;
+            margin-left: 28px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
+        <!-- ⚠️ Manual Sell Required Banner (shown when ₹1L gate blocks auto-exit) -->
+        <div id="approvalBanner">
+            <div class="approval-title">⚠️ MANUAL SELL REQUIRED — Auto-exit blocked for large positions</div>
+            <div id="approvalAlertsList" class="approval-list"></div>
+            <div class="approval-hint">Go to <strong>Open Positions</strong> below → click <strong>🔴 SELL</strong> to close manually.</div>
+        </div>
         <div class="header">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <h1>🚀 TradiqAI - Live Dashboard</h1>
@@ -1675,7 +1717,10 @@ HTML_TEMPLATE = """
             // Update news feed
             console.log('[Dashboard] Updating news feed:', data.news_feed ? data.news_feed.length : 0, 'items');
             updateNewsFeed(data.news_feed);
-            
+
+            // Update manual approval banner
+            updateApprovalBanner(data.approval_alerts);
+
             console.log('[Dashboard] ✅ Update complete!');
         }
         
@@ -1832,7 +1877,24 @@ HTML_TEMPLATE = """
             
             container.innerHTML = html;
         }
-        
+
+        function updateApprovalBanner(alerts) {
+            const banner = document.getElementById('approvalBanner');
+            const list   = document.getElementById('approvalAlertsList');
+            if (!alerts || alerts.length === 0) {
+                banner.style.display = 'none';
+                return;
+            }
+            banner.style.display = 'block';
+            list.innerHTML = alerts.map(a => {
+                const val = (a.quantity && a.entry_price)
+                    ? '₹' + (a.quantity * a.entry_price).toLocaleString('en-IN', {maximumFractionDigits: 0})
+                    : '';
+                const reason = a.reason ? ` — <em>${a.reason}</em>` : '';
+                return `• <strong>${a.symbol}</strong> (${a.quantity} shares${val ? ', ~' + val : ''})${reason}`;
+            }).join('<br>');
+        }
+
         // Initialize on page load
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
@@ -2431,7 +2493,38 @@ async def get_dashboard_data(user_id: str) -> Dict:
         # News feed - Dashboard uses Supabase, not local SQLite
         # TODO: Implement news feed from Supabase when news_items table is ready
         news_feed_data = []
-        
+
+        # Query local PostgreSQL for trades blocked by the ₹1L approval gate
+        approval_alerts = []
+        try:
+            from database import get_session_local
+            from models import Trade as LocalTrade, TradeStatus as LocalTradeStatus
+            _SessionLocal = get_session_local()
+            if _SessionLocal:
+                _db = _SessionLocal()
+                try:
+                    blocked = _db.query(LocalTrade).filter(
+                        LocalTrade.status == LocalTradeStatus.OPEN,
+                        LocalTrade.notes.ilike('%APPROVAL_REQUIRED%')
+                    ).all()
+                    for bt in blocked:
+                        reason = ""
+                        if bt.notes:
+                            for line in bt.notes.split('\n'):
+                                if line.startswith('APPROVAL_REQUIRED:'):
+                                    reason = line.replace('APPROVAL_REQUIRED:', '').strip()
+                                    break
+                        approval_alerts.append({
+                            "symbol": bt.symbol,
+                            "quantity": bt.quantity,
+                            "entry_price": float(bt.entry_price),
+                            "reason": reason
+                        })
+                finally:
+                    _db.close()
+        except Exception as _ae:
+            logger.debug(f"Could not fetch approval alerts from local DB: {_ae}")
+
         total_time = time.time() - start_time
         print(f"✅ Dashboard data complete in {total_time:.3f}s - returning {len(monitored_stocks_data)} stocks, {len(positions_data)} positions, {len(trades_data)} trades")
         logger.info(f"📊 Dashboard data fetched in {total_time:.3f}s")
@@ -2453,7 +2546,9 @@ async def get_dashboard_data(user_id: str) -> Dict:
             "news_feed": news_feed_data,
             "signals": 0,  # We can add signal tracking later
             # Dividend Radar Engine candidates (if scheduler has run)
-            "dividend_radar": []
+            "dividend_radar": [],
+            # Trades blocked by ₹1L approval gate — require manual sell
+            "approval_alerts": approval_alerts
         }
         
     except Exception as e:

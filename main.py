@@ -627,6 +627,32 @@ class TradingSystem:
                     except Exception as swing_err:
                         logger.warning(f"Swing exit check error for {trade.symbol}: {swing_err}")
 
+                # ── ₹1 LAKH MANUAL APPROVAL GATE ───────────────────────
+                # Never auto-sell a position worth > ₹1,00,000.
+                # Block the exit, alert the user, and wait for manual action
+                # from the dashboard. Manual sells via /api/place_order are
+                # NOT affected by this guard (they are already manual).
+                LARGE_POSITION_THRESHOLD = 100_000  # ₹1 lakh
+                if should_exit:
+                    exit_value = current_price * trade.quantity
+                    if exit_value > LARGE_POSITION_THRESHOLD:
+                        alert_msg = (
+                            f"⚠️ MANUAL APPROVAL REQUIRED\n"
+                            f"Symbol : {trade.symbol}\n"
+                            f"Qty    : {trade.quantity} shares\n"
+                            f"Price  : ₹{current_price:.2f}\n"
+                            f"Value  : ₹{exit_value:,.0f}\n"
+                            f"Reason : {exit_reason}\n"
+                            f"Action : Go to Dashboard → sell manually"
+                        )
+                        logger.warning(f"[BLOCKED] {trade.symbol} auto-exit blocked — position ₹{exit_value:,.0f} > ₹1L threshold")
+                        await self.monitoring.send_alert(alert_msg, severity="HIGH")
+                        # Stamp the trade so dashboard shows it needs attention
+                        if "APPROVAL_REQUIRED" not in (trade.notes or ""):
+                            trade.notes = (trade.notes or "") + f"\nAPPROVAL_REQUIRED:{exit_reason}"
+                            self.db.commit()
+                        should_exit = False   # block the automated exit
+
                 # Place exit order
                 if should_exit:
                     # Determine exit transaction type (opposite of entry)
