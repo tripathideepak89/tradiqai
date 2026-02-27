@@ -94,8 +94,8 @@ def _fetch_price_data(symbol: str) -> Optional[dict]:
             logger.warning(f"Price data insufficient for {symbol}")
             return None
 
-        close  = df["Close"]
-        price  = float(close.iloc[-1])
+        close  = df["Close"].squeeze()  # flatten multi-level columns from newer yfinance
+        price  = float(close.iloc[-1].item() if hasattr(close.iloc[-1], "item") else close.iloc[-1])
         sma20  = float(close.tail(20).mean())
         sma50  = float(close.tail(50).mean())
         sma200 = float(close.tail(200).mean()) if len(close) >= 200 else None
@@ -331,6 +331,15 @@ class DividendScoringEngine:
         return scored
 
     def _score_one(self, rec: dict, symbol: str) -> dict:
+        # Normalise ex_date to "YYYY-MM-DD" string regardless of whether
+        # it comes in as a datetime.date (from psycopg DB read) or a string.
+        _raw_ex = rec.get("ex_date", "")
+        if hasattr(_raw_ex, "strftime"):          # datetime.date / datetime.datetime
+            ex_date_str = _raw_ex.strftime("%Y-%m-%d")
+        else:
+            ex_date_str = str(_raw_ex) if _raw_ex else ""
+        rec = {**rec, "ex_date": ex_date_str}
+
         # Fetch price data (cached)
         if symbol not in self._price_cache:
             self._price_cache[symbol] = _fetch_price_data(symbol)
@@ -341,9 +350,9 @@ class DividendScoringEngine:
             self._fund_cache[symbol] = _fetch_fundamentals(symbol)
         fund = self._fund_cache[symbol] or {}
 
-        # Compute yield
+        # Compute yield — cast to float so Decimal from psycopg doesn't break division
         price         = price_data["price"] if price_data else None
-        div_amt       = rec.get("dividend_amount") or 0
+        div_amt       = float(rec.get("dividend_amount") or 0)
         yield_pct     = _compute_yield(div_amt, price) if price else 0.0
 
         # Individual scores
