@@ -2128,21 +2128,28 @@ async def websocket_endpoint(websocket: WebSocket):
             # Gather all data for this user
             data = await get_dashboard_data(user_id)
             print(f"✅ Data gathered: {len(data.get('monitored_stocks', []))} stocks, {len(data.get('positions', []))} positions")
-            
-            # Send to client
+
+            # Send to client — check connection state first
+            if websocket.client_state.value != 1:  # 1 = CONNECTED
+                break
             await websocket.send_json(data)
             print("✅ Data sent to client")
-            
-            # Wait before next update
-            await asyncio.sleep(2)  # Update every 2 seconds
-            
+
+            # Wait before next update (fetch takes ~7s so 30s total cycle is fine)
+            await asyncio.sleep(30)
+
     except WebSocketDisconnect:
-        print("❌ WebSocket disconnected")
+        print("⚠️ WebSocket disconnected (client navigated away)")
         manager.disconnect(websocket)
     except Exception as e:
-        print(f"❌ WebSocket error: {e}")
-        import traceback
-        traceback.print_exc()
+        # Suppress noisy traceback for normal client-disconnect exceptions
+        err_str = str(type(e).__name__)
+        if "ClientDisconnected" in err_str or "ConnectionClosed" in err_str:
+            print(f"⚠️ WebSocket client disconnected during send")
+        else:
+            print(f"❌ WebSocket error: {e}")
+            import traceback
+            traceback.print_exc()
         manager.disconnect(websocket)
 
 async def get_dashboard_data(user_id: str) -> Dict:
