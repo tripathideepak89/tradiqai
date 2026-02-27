@@ -808,12 +808,12 @@ async function loadData() {
       'Updated: ' + new Date().toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit'});
     toast('Data refreshed successfully', 'success');
   } catch(e) {
-    console.warn('API unavailable, using demo data:', e.message);
-    ALL_DATA = DEMO_DATA;
+    console.warn('API unavailable:', e.message);
+    ALL_DATA = [];
     updateStats();
     renderTable();
-    document.getElementById('last-update').textContent = 'Demo mode';
-    toast('API unavailable — showing demo data', 'error');
+    document.getElementById('last-update').textContent = 'API unavailable';
+    toast('Could not load data — run DRE cron or check connection', 'error');
   } finally {
     btn.classList.remove('loading');
     btn.textContent = '⟳ Refresh';
@@ -1157,19 +1157,16 @@ function runBacktest() {
     cost_bps:          parseInt(document.getElementById('bt-cost').value),
   };
 
-  // Try backend first, fall back to simulated
   fetch(`${API_BASE}/api/dividends/backtest`, {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify(cfg)
   })
-  .then(r => r.ok ? r.json() : Promise.reject())
+  .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
   .then(data => renderBacktestResults(data))
-  .catch(() => {
-    // Simulate results for demo
-    setTimeout(() => {
-      renderBacktestResults(simulateBacktest(cfg));
-    }, 800);
+  .catch(err => {
+    toast('Backtest unavailable — run DRE cron to populate historical data', 'error');
+    console.warn('Backtest failed:', err.message);
   })
   .finally(() => {
     btn.disabled = false;
@@ -1177,50 +1174,6 @@ function runBacktest() {
   });
 }
 
-function simulateBacktest(cfg) {
-  // Deterministic simulation based on config params
-  const base_wr  = cfg.use_trend_filter ? 62 : 51;
-  const base_ret = cfg.strategy === 'S1' ? 1.8 : cfg.exit_offset >= 10 ? 1.2 : 0.8;
-  const n        = 120 + cfg.entry_n * 3;
-  const wr       = Math.min(base_wr + (cfg.min_yield * 2), 75) + (Math.random()*6-3);
-  const avg_ret  = base_ret - (cfg.cost_bps/1000) + (Math.random()*0.4-0.2);
-  const pf       = wr > 50 ? (wr / (100-wr)) * (Math.abs(avg_ret)/0.8) : 0.9;
-  const max_dd   = -(3 + Math.random()*5);
-
-  // Robustness rows
-  const rob = [];
-  [5,10,15].forEach(en => {
-    [-1,5,10,20].forEach(eo => {
-      const s = eo < 0 ? 'S1' : 'S2';
-      const w = base_wr + en - Math.abs(eo) + (Math.random()*10-5);
-      const r = base_ret + (en-10)*0.05 - (cfg.cost_bps/1000);
-      rob.push({ strategy:s, entry_n:en, exit_offset:eo, n_trades:Math.round(n*(en/10)),
-        win_rate: Math.min(Math.max(w,30),80).toFixed(1), avg_return: r.toFixed(3),
-        profit_factor: (w/100 / (1-w/100) * Math.abs(r)/0.8).toFixed(2) });
-    });
-  });
-
-  // Event study curve (synthetic)
-  const curve = Array.from({length:31},(_,i) => {
-    const day = i - 15;
-    let val = 0;
-    if (cfg.strategy === 'S1') {
-      // Pre-ex run-up then drop at ex-date
-      if (day < 0)  val = day * 0.1 + (Math.random()*0.15-0.075);
-      if (day === 0) val = -1.5;
-      if (day > 0)  val = -1.5 + day * 0.08;
-    } else {
-      // S2: run-up, dip, recovery
-      if (day < 0)  val = day * 0.08;
-      if (day >= 0) val = -0.8 + day * 0.06;
-    }
-    return { day, val };
-  });
-
-  return { n_trades:n, win_rate:wr.toFixed(1), avg_net_return:avg_ret.toFixed(3),
-    profit_factor:pf.toFixed(2), max_drawdown:max_dd.toFixed(2),
-    total_net_return:(avg_ret*n/10).toFixed(2), rob_rows: rob, event_curve: curve };
-}
 
 function renderBacktestResults(data) {
   // Summary stats
@@ -1410,90 +1363,7 @@ function updateExitLabel() {
     s === 'S1' ? 'Exit: 1 day before ex-date (S1)' : 'Exit: days after ex-date (S2)';
 }
 
-/* ═══════════════════════════════════════════════════
-   DEMO DATA (when API is unavailable)
-═══════════════════════════════════════════════════ */
-const DEMO_DATA = [
-  { symbol:"ITC", name:"ITC Ltd", exchange:"NSE", source:"NSE", series:"EQ",
-    purpose:"Annual General Meeting/Dividend - Rs 6.50 Per Share",
-    dividend_type:"Final", dividend_amount:6.50, face_value:1, yield_pct:3.5,
-    ex_date:"2026-03-12", record_date:"2026-03-13", payment_date:null,
-    dre_score:82, category:"Strong Buy", is_trap:false, entry_signal:true,
-    trend:"Strong", price:462, above_20dma:true, above_50dma:true, above_200dma:true,
-    roe:22, de:0.1, days_to_ex:14, entry_zone_low:455, entry_zone_high:470,
-    score_yield:20, score_consistency:20, score_growth:15, score_financial:20, score_technical:10,
-    div_history:[6.5,6.0,5.5,5.0,4.5] },
-
-  { symbol:"POWERGRID", name:"Power Grid Corp", exchange:"NSE", source:"NSE",
-    purpose:"Interim Dividend - Rs 7.50 Per Share",
-    dividend_type:"Interim", dividend_amount:7.50, face_value:10, yield_pct:5.8,
-    ex_date:"2026-03-22", record_date:"2026-03-24", payment_date:"2026-04-08",
-    dre_score:88, category:"Strong Buy", is_trap:false, entry_signal:true,
-    trend:"Strong", price:318, above_20dma:true, above_50dma:true, above_200dma:true,
-    roe:20, de:0.9, days_to_ex:24, entry_zone_low:312, entry_zone_high:325,
-    score_yield:25, score_consistency:20, score_growth:15, score_financial:20, score_technical:10,
-    div_history:[7.5,7.0,6.5,6.0,5.5] },
-
-  { symbol:"COALINDIA", name:"Coal India Ltd", exchange:"BSE", source:"BSE",
-    purpose:"Interim Dividend - Rs 14.50 Per Share",
-    dividend_type:"Interim", dividend_amount:14.50, face_value:10, yield_pct:7.2,
-    ex_date:"2026-03-08", record_date:"2026-03-09", payment_date:"2026-03-25",
-    dre_score:74, category:"Watchlist", is_trap:false, entry_signal:true,
-    trend:"Moderate", price:392, above_20dma:true, above_50dma:true, above_200dma:false,
-    roe:31, de:0.3, days_to_ex:10, entry_zone_low:385, entry_zone_high:400,
-    score_yield:25, score_consistency:20, score_growth:5, score_financial:20, score_technical:5,
-    div_history:[14.5,13.5,12.0,10.0,9.5] },
-
-  { symbol:"NESTLEIND", name:"Nestle India Ltd", exchange:"NSE", source:"NSE",
-    purpose:"Annual Dividend - Rs 75 Per Share",
-    dividend_type:"Final", dividend_amount:75, face_value:1, yield_pct:2.1,
-    ex_date:"2026-03-25", record_date:"2026-03-26",
-    dre_score:78, category:"Watchlist", is_trap:false, entry_signal:false,
-    trend:"Strong", price:2280, above_20dma:true, above_50dma:true, above_200dma:true,
-    roe:24, de:0.0, days_to_ex:27, entry_zone_low:2250, entry_zone_high:2300,
-    score_yield:10, score_consistency:20, score_growth:15, score_financial:20, score_technical:15,
-    div_history:[75,65,55,50,45] },
-
-  { symbol:"HDFCBANK", name:"HDFC Bank Ltd", exchange:"NSE", source:"NSE",
-    purpose:"Dividend - Rs 19 Per Share",
-    dividend_type:"Dividend", dividend_amount:19, face_value:1, yield_pct:1.2,
-    ex_date:"2026-03-18", record_date:"2026-03-19",
-    dre_score:68, category:"Watchlist", is_trap:false, entry_signal:false,
-    trend:"Moderate", price:1720, above_20dma:true, above_50dma:false, above_200dma:true,
-    roe:16, de:0.8, days_to_ex:20, entry_zone_low:1700, entry_zone_high:1740,
-    score_yield:0, score_consistency:20, score_growth:15, score_financial:15, score_technical:18,
-    div_history:[19,15,12,10,8] },
-
-  { symbol:"ONGC", name:"ONGC Ltd", exchange:"BSE", source:"BSE",
-    purpose:"Final Dividend - Rs 5.00 Per Share",
-    dividend_type:"Final", dividend_amount:5.0, face_value:5, yield_pct:6.1,
-    ex_date:"2026-03-10", record_date:"2026-03-11",
-    dre_score:44, category:"Moderate", is_trap:false, entry_signal:false,
-    trend:"Weak", price:241, above_20dma:false, above_50dma:false, above_200dma:false,
-    roe:9, de:1.2, days_to_ex:12,
-    score_yield:25, score_consistency:15, score_growth:5, score_financial:0, score_technical:0,
-    div_history:[5.0,4.5,5.5,3.5,4.0] },
-
-  { symbol:"TATASTEEL", name:"Tata Steel Ltd", exchange:"BSE", source:"BSE",
-    purpose:"Dividend - Rs 3.60 Per Share",
-    dividend_type:"Dividend", dividend_amount:3.60, face_value:1, yield_pct:9.2,
-    ex_date:"2026-03-07", record_date:"2026-03-08", payment_date:"2026-04-01",
-    dre_score:31, category:"Ignore", is_trap:true, entry_signal:false,
-    trend:"Downtrend", price:128, above_20dma:false, above_50dma:false, above_200dma:false,
-    roe:7, de:1.8, days_to_ex:9,
-    score_yield:25, score_consistency:10, score_growth:0, score_financial:0, score_technical:0,
-    div_history:[3.6,3.5,5.0,2.0,1.0] },
-
-  { symbol:"HINDUNILVR", name:"Hindustan Unilever", exchange:"MC", source:"MC",
-    purpose:"Annual Dividend - Rs 21 Per Share",
-    dividend_type:"Final", dividend_amount:21, face_value:1, yield_pct:1.8,
-    ex_date:"2026-03-14", record_date:"2026-03-15",
-    dre_score:61, category:"Watchlist", is_trap:false, entry_signal:false,
-    trend:"Weak", price:2245, above_20dma:false, above_50dma:false, above_200dma:true,
-    roe:19, de:0.2, days_to_ex:16,
-    score_yield:10, score_consistency:20, score_growth:5, score_financial:20, score_technical:6,
-    div_history:[21,19,18,17,16] },
-];
+/* No demo data — radar shows only live data from DRE cron */
 
 /* ═══════════════════════════════════════════════════
    INIT
