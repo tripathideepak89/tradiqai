@@ -118,16 +118,21 @@ class TradingSystem:
             # Update available capital from broker
             await self.risk_engine.update_available_capital()
             logger.info(f"[OK] Trading capital: Rs{self.risk_engine.available_capital:,.2f}")
-            
-            # 4. Initialize Capital Management Engine (CME)
+
+            # Publish live broker capital as single source of truth
+            from live_capital import set_live_capital
+            _live_cap = self.risk_engine.available_capital or settings.cme_total_capital
+            set_live_capital(_live_cap)
+
+            # 4. Initialize Capital Management Engine (CME) with live broker capital
             from capital_manager import CapitalManager
             self.capital_manager = CapitalManager(
                 db_session=self.db,
-                total_capital=settings.cme_total_capital,
+                total_capital=_live_cap,
             )
             logger.info(
                 f"[OK] Capital Management Engine initialized — "
-                f"₹{settings.cme_total_capital:,.0f} capital"
+                f"₹{_live_cap:,.0f} live broker capital"
             )
 
             # 4b. Initialize order manager (pass CME as gatekeeper)
@@ -240,7 +245,14 @@ class TradingSystem:
                 # Update available capital every 10 minutes
                 if capital_update_counter % 10 == 0:
                     await self.risk_engine.update_available_capital()
-                    logger.debug(f"Capital updated: Rs{self.risk_engine.available_capital:,.2f}")
+                    _refreshed_cap = self.risk_engine.available_capital
+                    logger.debug(f"Capital updated: Rs{_refreshed_cap:,.2f}")
+                    # Keep live_capital and CME in sync with broker
+                    if _refreshed_cap > 0:
+                        from live_capital import set_live_capital
+                        set_live_capital(_refreshed_cap)
+                        if hasattr(self, 'capital_manager') and self.capital_manager is not None:
+                            self.capital_manager.total_capital = _refreshed_cap
                 capital_update_counter += 1
                 
                 # Check if market is open

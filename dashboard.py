@@ -2415,11 +2415,18 @@ async def get_dashboard_data(user_id: str) -> Dict:
                 logger.debug(f"⏱️ Margins fetched: {time.time() - account_start:.3f}s")
                 if margins:
                     # Use broker data if available, otherwise use user settings
+                    _broker_capital = margins.get("available_cash", user_data["capital"])
                     account_data = {
-                        "capital": margins.get("available_cash", user_data["capital"]),
+                        "capital": _broker_capital,
                         "margin_used": margins.get("margin_used", 0.0),
-                        "exposure": margins.get("margin_used", 0.0) / max(margins.get("available_cash", user_data["capital"]), 1.0) * 100
+                        "exposure": margins.get("margin_used", 0.0) / max(_broker_capital, 1.0) * 100
                     }
+                    # Publish as single source of truth for all portfolio analytics
+                    try:
+                        from live_capital import set_live_capital
+                        set_live_capital(_broker_capital)
+                    except Exception:
+                        pass
             except asyncio.TimeoutError:
                 print(f"     ⚠️ Margins fetch timed out after 5s, using user settings")
                 logger.warning("Margins fetch timed out")
@@ -2647,9 +2654,11 @@ async def get_dashboard_data(user_id: str) -> Dict:
                 _cme_db = _cme_SL()
                 try:
                     from config import settings as _cfg
+                    from live_capital import get_live_capital
+                    _cme_cap = get_live_capital(fallback=getattr(_cfg, 'cme_total_capital', 100_000.0))
                     _cme = CapitalManager(
                         db_session=_cme_db,
-                        total_capital=getattr(_cfg, 'cme_total_capital', 100_000.0),
+                        total_capital=_cme_cap,
                     )
                     portfolio_snapshot = _cme.get_snapshot().to_dict()
                 finally:

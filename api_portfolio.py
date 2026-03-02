@@ -39,9 +39,12 @@ def _get_db():
 
 
 def _capital() -> float:
+    """Always returns live broker available capital as the single source of truth.
+    Falls back to config.cme_total_capital if broker hasn't been polled yet."""
     try:
+        from live_capital import get_live_capital
         from config import settings
-        return float(getattr(settings, "cme_total_capital", 100_000.0))
+        return get_live_capital(fallback=float(getattr(settings, "cme_total_capital", 100_000.0)))
     except Exception:
         return 100_000.0
 
