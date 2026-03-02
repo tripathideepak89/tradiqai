@@ -1210,8 +1210,14 @@ HTML_TEMPLATE = """
                 <h1>🚀 TradiqAI - Live Dashboard</h1>
                 <div style="display: flex; align-items: center; gap: 15px;">
                     <span id="userInfo" style="color: #667eea; font-weight: bold;"></span>
-                    <a href="/dividend-radar" style="padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">📡 Dividend Radar</a>
-                    <button onclick="logout()" style="padding: 8px 16px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">🔓 Logout</button>
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <a href="/dividend-radar"   style="padding:7px 13px;background:#0e7490;color:#fff;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:5px;">📡 Dividend Radar</a>
+                        <a href="/risk-dashboard"   style="padding:7px 13px;background:#1e3a5f;color:#4dabff;border:1px solid #4dabff;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:5px;">📊 Risk</a>
+                        <a href="/compounding-plan" style="padding:7px 13px;background:#3b2a0a;color:#f5c518;border:1px solid #f5c518;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:5px;">📈 Compounding</a>
+                        <a href="/rebalance"        style="padding:7px 13px;background:#0a2e1a;color:#00ff9d;border:1px solid #00ff9d;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:5px;">⚖️ Rebalancer</a>
+                        <a href="/risk-of-ruin"     style="padding:7px 13px;background:#2e0a1a;color:#ff4d6d;border:1px solid #ff4d6d;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:5px;">💀 Risk of Ruin</a>
+                    </div>
+                    <button onclick="logout()" style="padding:8px 16px;background:#ef4444;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:bold;">🔓 Logout</button>
                 </div>
             </div>
             <div class="status">
