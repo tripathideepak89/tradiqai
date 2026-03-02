@@ -1389,6 +1389,7 @@ HTML_TEMPLATE = """
     <script>
         let ws = null;
         let currentTradeAction = null;
+        let _cachedUsername = '';
         
         // Check authentication on page load
         function checkAuth() {
@@ -1415,6 +1416,7 @@ HTML_TEMPLATE = """
                 
                 if (response.ok) {
                     const user = await response.json();
+                    _cachedUsername = user.username || '';
                     document.getElementById('userInfo').textContent = `👤 ${user.username} | Capital: ₹${user.capital.toLocaleString()}`;
                 } else if (response.status === 401) {
                     // Token expired or invalid - try refreshing
@@ -1750,12 +1752,17 @@ HTML_TEMPLATE = """
             // Update account metrics
             console.log('[Dashboard] Updating account:', data.account);
             if (data.account) {
-                document.getElementById('capital').textContent = 
+                document.getElementById('capital').textContent =
                     '₹' + data.account.capital.toFixed(2);
-                document.getElementById('marginUsed').textContent = 
+                document.getElementById('marginUsed').textContent =
                     '₹' + data.account.margin_used.toFixed(2);
-                document.getElementById('exposure').textContent = 
+                document.getElementById('exposure').textContent =
                     data.account.exposure.toFixed(1) + '%';
+                // Keep topbar in sync with live broker capital
+                if (_cachedUsername) {
+                    document.getElementById('userInfo').textContent =
+                        `👤 ${_cachedUsername} | Capital: ₹${data.account.capital.toLocaleString('en-IN', {maximumFractionDigits: 2})}`;
+                }
             }
             
             // Update performance
@@ -2425,6 +2432,11 @@ async def get_dashboard_data(user_id: str) -> Dict:
                     try:
                         from live_capital import set_live_capital
                         set_live_capital(_broker_capital)
+                    except Exception:
+                        pass
+                    # Persist to Supabase so /api/auth/me always returns current capital
+                    try:
+                        supabase.table("users").update({"capital": _broker_capital}).eq("id", user_id).execute()
                     except Exception:
                         pass
             except asyncio.TimeoutError:
