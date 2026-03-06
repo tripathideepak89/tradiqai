@@ -94,6 +94,14 @@ try:
 except Exception as _pf_err:
     logger.warning(f"⚠️ Portfolio analytics routes not loaded: {_pf_err}")
 
+# ── Audit API (Rejected Trades) ──────────────────────────────────────────────
+try:
+    from api_audit import router as _audit_router
+    app.include_router(_audit_router)
+    logger.info("✅ Audit API routes registered")
+except Exception as _audit_err:
+    logger.warning(f"⚠️ Audit routes not loaded: {_audit_err}")
+
 
 # ── Portfolio Analytics HTML pages ──────────────────────────────────────────
 
@@ -132,6 +140,12 @@ async def rebalance_page():
 async def risk_of_ruin_page():
     """Monte Carlo risk-of-ruin calculator."""
     return _serve_template("risk_of_ruin.html")
+
+
+@app.get("/audit/rejected-trades")
+async def rejected_trades_page():
+    """Audit: rejected trade signals (read-only, auth enforced client-side)."""
+    return _serve_template("rejected_trades.html")
 
 
 @app.get("/dividend-radar")
@@ -1216,6 +1230,7 @@ HTML_TEMPLATE = """
                         <a href="/compounding-plan" style="padding:7px 13px;background:#3b2a0a;color:#f5c518;border:1px solid #f5c518;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:5px;">📈 Compounding</a>
                         <a href="/rebalance"        style="padding:7px 13px;background:#0a2e1a;color:#00ff9d;border:1px solid #00ff9d;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:5px;">⚖️ Rebalancer</a>
                         <a href="/risk-of-ruin"     style="padding:7px 13px;background:#2e0a1a;color:#ff4d6d;border:1px solid #ff4d6d;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:5px;">💀 Risk of Ruin</a>
+                        <a href="/audit/rejected-trades" style="padding:7px 13px;background:#1a1a2e;color:#c084fc;border:1px solid #c084fc;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:5px;">🚫 Rejected Trades</a>
                     </div>
                     <button onclick="logout()" style="padding:8px 16px;background:#ef4444;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:bold;">🔓 Logout</button>
                 </div>

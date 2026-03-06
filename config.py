@@ -84,7 +84,18 @@ class Settings(BaseSettings):
 
     # Capital Management Engine (CME)
     cme_total_capital: float = 100_000.0  # ₹1,00,000 portfolio capital
-    
+
+    # ── Rejected Trades Audit ────────────────────────────────────────────────
+    # Set REJECTED_TRADES_AUDIT_ENABLED=false to disable logging + UI entirely.
+    rejected_trades_audit_enabled: bool = True
+    # How many days to retain rejected-trade records before the cleanup job
+    # deletes them (configurable via REJECTED_TRADES_RETENTION_DAYS env var).
+    rejected_trades_retention_days: int = 30
+    # Supabase UUID of the primary trading account owner.  When the trading
+    # system logs a rejection it tags it with this ID so the audit UI can
+    # filter correctly.  Leave empty to tag with "system".
+    trading_account_user_id: Optional[str] = None
+
     class Config:
         env_file = ".env"
         case_sensitive = False

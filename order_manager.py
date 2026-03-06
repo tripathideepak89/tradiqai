@@ -15,6 +15,10 @@ from transaction_cost_calculator import cost_calculator
 logger = logging.getLogger(__name__)
 
 
+def _audit_enabled() -> bool:
+    return getattr(settings, "rejected_trades_audit_enabled", True)
+
+
 class OrderManager:
     """Manages order lifecycle and execution
 
@@ -34,13 +38,91 @@ class OrderManager:
         risk_engine: RiskEngine,
         db_session: Session,
         capital_manager=None,   # Optional[CapitalManager] — avoids circular import
+        user_id: str = "",      # Supabase UUID of the account owner (for audit log)
     ):
         self.broker = broker
         self.risk_engine = risk_engine
         self.db = db_session
         self.capital_manager = capital_manager   # CME gatekeeper
+        self.user_id = user_id or getattr(settings, "trading_account_user_id", None) or "system"
         self.active_orders: Dict[str, Trade] = {}  # order_id -> Trade
         self.position_reconciliation_interval = settings.position_reconciliation_interval
+
+    # ── Rejection audit helpers ───────────────────────────────────────────────
+
+    def _build_rejection_snapshot(self, symbol: str = "") -> "Optional[object]":
+        """Build a RiskSnapshot from available engine state.  Never raises."""
+        if not _audit_enabled():
+            return None
+        try:
+            from rejected_trades import RiskSnapshot
+            snap = RiskSnapshot()
+            # Capital / exposure from risk engine
+            if self.risk_engine is not None:
+                snap.cash_available = getattr(self.risk_engine, "available_capital", 0.0)
+            # Drawdown / portfolio state from CME
+            if self.capital_manager is not None:
+                cm = self.capital_manager
+                try:
+                    snap.drawdown_pct = round(cm._drawdown_pct(), 2)
+                except Exception:
+                    pass
+                try:
+                    total_exp = cm._total_exposure()
+                    total_cap = cm.total_capital or 1.0
+                    snap.exposure_pct = round(total_exp / total_cap * 100, 2)
+                    snap.portfolio_equity = round(cm.current_equity, 2)
+                    snap.cash_available = round(
+                        max(0.0, total_cap - total_exp), 2
+                    )
+                except Exception:
+                    pass
+                try:
+                    snap.regime = str(getattr(cm, "_regime", "UNKNOWN"))
+                except Exception:
+                    pass
+                if symbol:
+                    try:
+                        from capital_manager import get_sector
+                        sec = get_sector(symbol)
+                        sec_exp = cm._sector_exposure(sec)
+                        snap.sector_exposure_pct = round(
+                            sec_exp / (cm.total_capital or 1.0) * 100, 2
+                        )
+                    except Exception:
+                        pass
+            return snap
+        except Exception:
+            return None
+
+    def _log_rejection(
+        self,
+        signal: "Signal",
+        strategy_name: str,
+        reasons: list,
+        snapshot=None,
+    ) -> None:
+        """Fire-and-forget rejection audit log.  Never raises, never blocks."""
+        if not _audit_enabled():
+            return
+        try:
+            from rejected_trades import RejectedTradesService
+            svc = RejectedTradesService(self.db)
+            svc.log_rejection(
+                user_id=self.user_id,
+                symbol=signal.symbol,
+                strategy_name=strategy_name,
+                side=getattr(signal, "action", "BUY"),
+                order_type=getattr(signal, "product", "CNC"),
+                entry_price=getattr(signal, "entry_price", None),
+                stop_loss=getattr(signal, "stop_loss", None),
+                target=getattr(signal, "target", None),
+                quantity=getattr(signal, "quantity", 0),
+                snapshot=snapshot,
+                reasons=reasons,
+            )
+        except Exception as exc:
+            logger.debug(f"[RejectedTrades] audit log failed: {exc}")
     
     async def execute_signal(self, signal: Signal, strategy_name: str) -> Optional[Trade]:
         """Execute a trading signal
@@ -76,6 +158,19 @@ class OrderManager:
                     symbol=signal.symbol,
                     severity="WARNING"
                 )
+                if _audit_enabled():
+                    from rejected_trades import RejectionReason
+                    self._log_rejection(signal, strategy_name, [
+                        RejectionReason(
+                            code="AFTER_CUTOFF",
+                            message=(
+                                f"Intraday order rejected — outside allowed window "
+                                f"09:15–15:20 IST (current: {current_time.strftime('%H:%M:%S')})"
+                            ),
+                            rule_name="execute_signal.intraday_hours_check",
+                            rule_value="window=09:15-15:20",
+                        )
+                    ], self._build_rejection_snapshot(signal.symbol))
                 return None
             
             # 1. Check for existing open/pending positions
@@ -97,6 +192,18 @@ class OrderManager:
                     symbol=signal.symbol,
                     severity="WARNING"
                 )
+                if _audit_enabled():
+                    from rejected_trades import RejectionReason
+                    self._log_rejection(signal, strategy_name, [
+                        RejectionReason(
+                            code="DUPLICATE_SIGNAL",
+                            message=(
+                                f"Duplicate signal — position id={existing_position.id} "
+                                f"already {existing_position.status.value}"
+                            ),
+                            rule_name="execute_signal.duplicate_position_check",
+                        )
+                    ], self._build_rejection_snapshot(signal.symbol))
                 return None
             
             # Check if there was a recent rejected order (for logging/monitoring)
@@ -175,6 +282,18 @@ class OrderManager:
                             symbol=signal.symbol,
                             severity="WARNING"
                         )
+                        if _audit_enabled():
+                            from rejected_trades import RejectionReason
+                            self._log_rejection(signal, strategy_name, [
+                                RejectionReason(
+                                    code="NON_RETRYABLE_REJECTION",
+                                    message=(
+                                        f"Retry blocked — previous broker rejection "
+                                        f"was non-retryable: {rejection_reason[:200]}"
+                                    ),
+                                    rule_name="execute_signal.non_retryable_check",
+                                )
+                            ], self._build_rejection_snapshot(signal.symbol))
                         return None
                     else:
                         logger.info(
@@ -213,13 +332,31 @@ class OrderManager:
                     logger.error(
                         f"  Expected Net Profit: ₹{cost_metrics.get('expected_net_profit', 0):.2f}"
                     )
-                    
+
                     self._log_event(
                         event_type="COST_FILTER_REJECTED",
                         message=f"Cost filter: {cost_reason}",
                         symbol=signal.symbol,
                         severity="WARNING"
                     )
+                    if _audit_enabled():
+                        from rejected_trades import RejectionReason
+                        _cr = cost_metrics.get("cost_ratio", 0)
+                        self._log_rejection(signal, strategy_name, [
+                            RejectionReason(
+                                code="COST_FILTER",
+                                message=(
+                                    f"Transaction costs eat too much profit — "
+                                    f"cost ratio {_cr:.1f}% (max 25%): {cost_reason}"
+                                ),
+                                rule_name="cost_calculator.validate_trade_profitability",
+                                rule_value=(
+                                    f"cost_ratio={_cr:.1f}%,"
+                                    f"total_cost=₹{cost_metrics.get('total_cost',0):.2f},"
+                                    f"expected_net=₹{cost_metrics.get('expected_net_profit',0):.2f}"
+                                ),
+                            )
+                        ], self._build_rejection_snapshot(signal.symbol))
                     return None
                 
                 # Log cost metrics for approved trades
@@ -263,6 +400,40 @@ class OrderManager:
                         symbol=signal.symbol,
                         severity="WARNING"
                     )
+                    if _audit_enabled():
+                        from rejected_trades import RejectionReason
+                        # Map CME reason text to structured code
+                        _r = cme.reason or ""
+                        if "HALTED" in _r:
+                            _code = "CME_HALTED"
+                        elif "Cash reserve" in _r or "reserve floor" in _r:
+                            _code = "CME_CASH_RESERVE"
+                        elif "bucket" in _r or "Strategy bucket" in _r:
+                            _code = "CME_STRATEGY_CAP"
+                        elif "Sector" in _r or "sector" in _r:
+                            _code = "CME_SECTOR_CAP"
+                        elif "Invalid stop" in _r:
+                            _code = "CME_INVALID_SL"
+                        elif "Position too small" in _r or "< 1" in _r:
+                            _code = "CME_POSITION_TOO_SMALL"
+                        else:
+                            _code = "CME_REJECTED"
+                        _snap = self._build_rejection_snapshot(signal.symbol)
+                        if _snap is not None and self.capital_manager is not None:
+                            try:
+                                _snap.drawdown_pct = round(
+                                    self.capital_manager._drawdown_pct(), 2
+                                )
+                            except Exception:
+                                pass
+                        self._log_rejection(signal, strategy_name, [
+                            RejectionReason(
+                                code=_code,
+                                message=_r,
+                                rule_name=f"capital_manager.approve_trade.{_code}",
+                                rule_value=f"risk_mode={cme.risk_mode}",
+                            )
+                        ], _snap)
                     return None
 
                 # Apply CME-adjusted quantity (risk-sized, not strategy-sized)
@@ -295,6 +466,31 @@ class OrderManager:
                     symbol=signal.symbol,
                     severity="WARNING"
                 )
+                if _audit_enabled():
+                    from rejected_trades import RejectionReason
+                    _rr = risk_check.reason or ""
+                    if "GOVERNANCE" in _rr:
+                        _rcode = "RISK_GOVERNANCE"
+                    elif "halted" in _rr.lower():
+                        _rcode = "RISK_TRADING_HALTED"
+                    elif "Daily loss" in _rr or "daily loss" in _rr:
+                        _rcode = "RISK_DAILY_LOSS"
+                    elif "Consecutive loss" in _rr or "pause" in _rr:
+                        _rcode = "RISK_CONSECUTIVE_LOSS"
+                    elif "positions" in _rr.lower():
+                        _rcode = "RISK_MAX_POSITIONS"
+                    elif "COST FILTER" in _rr:
+                        _rcode = "RISK_COST_FILTER"
+                    else:
+                        _rcode = "RISK_REJECTED"
+                    self._log_rejection(signal, strategy_name, [
+                        RejectionReason(
+                            code=_rcode,
+                            message=_rr,
+                            rule_name="risk_engine.check_trade_approval",
+                            rule_value=f"risk_score={risk_check.risk_score:.2f}",
+                        )
+                    ], self._build_rejection_snapshot(signal.symbol))
                 return None
             
             logger.info(f"[DEBUG] Risk check passed for {signal.symbol}, calculating position size...")

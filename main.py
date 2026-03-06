@@ -139,6 +139,7 @@ class TradingSystem:
             self.order_manager = OrderManager(
                 self.broker, self.risk_engine, self.db,
                 capital_manager=self.capital_manager,
+                user_id=getattr(settings, "trading_account_user_id", None) or "system",
             )
             logger.info("[OK] Order manager initialized")
             
@@ -237,11 +238,23 @@ class TradingSystem:
     async def trading_loop(self) -> None:
         """Main trading loop - runs during market hours"""
         logger.info("Trading loop started")
-        
+
         capital_update_counter = 0
-        
+        _last_cleanup_date = None  # track daily rejected-trades cleanup
+
         while self.is_running:
             try:
+                # Daily cleanup of old rejected-trade records (runs once per calendar day)
+                try:
+                    from datetime import date as _date
+                    _today = _date.today()
+                    if _last_cleanup_date != _today and getattr(settings, "rejected_trades_audit_enabled", True):
+                        from rejected_trades import RejectedTradesService
+                        RejectedTradesService.cleanup_old(self.db)
+                        _last_cleanup_date = _today
+                except Exception as _cleanup_exc:
+                    logger.debug(f"[RejectedTrades] cleanup skipped: {_cleanup_exc}")
+
                 # Update available capital every 10 minutes
                 if capital_update_counter % 10 == 0:
                     await self.risk_engine.update_available_capital()

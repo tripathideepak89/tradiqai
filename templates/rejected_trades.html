@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TradiqAI — Rejected Trades Audit</title>
+<style>
+  :root {
+    --bg0: #060810; --bg1: #0d1117; --bg2: #161b22; --bg3: #1f2937;
+    --purple: #c084fc; --purple-dim: #7e22ce;
+    --red: #f87171; --green: #4ade80; --yellow: #fbbf24;
+    --blue: #60a5fa; --gray: #9ca3af;
+    --text: #e5e7eb; --border: #374151;
+    --radius: 8px; --font: "Inter", "Segoe UI", sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg0); color: var(--text); font-family: var(--font); font-size: 14px; }
+
+  /* ── Layout ── */
+  .topbar {
+    background: var(--bg1); border-bottom: 1px solid var(--border);
+    padding: 14px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .topbar h1 { font-size: 18px; font-weight: 700; color: var(--purple); }
+  .topbar .back { color: var(--gray); text-decoration: none; font-size: 13px; }
+  .topbar .back:hover { color: var(--text); }
+  .topbar .user-tag { margin-left: auto; color: var(--gray); font-size: 12px; }
+  .topbar .flag-badge {
+    font-size: 11px; padding: 3px 8px; border-radius: 4px;
+    background: #052e16; color: #4ade80; border: 1px solid #166534;
+  }
+  .topbar .flag-badge.off { background: #2d1b1b; color: #f87171; border-color: #7f1d1d; }
+
+  main { max-width: 1280px; margin: 0 auto; padding: 20px 24px; }
+
+  /* ── Filters ── */
+  .filters {
+    display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;
+    background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px; margin-bottom: 20px;
+  }
+  .filter-group { display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
+  .filter-group label { font-size: 11px; color: var(--gray); text-transform: uppercase; letter-spacing: .05em; }
+  .filter-group input, .filter-group select {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 5px;
+    color: var(--text); padding: 7px 10px; font-size: 13px; outline: none;
+  }
+  .filter-group input:focus, .filter-group select:focus { border-color: var(--purple); }
+  .btn {
+    padding: 8px 18px; border-radius: 5px; border: none; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  .btn-primary { background: var(--purple-dim); color: #fff; }
+  .btn-primary:hover { background: #6d28d9; }
+  .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--gray); }
+  .btn-ghost:hover { border-color: var(--purple); color: var(--purple); }
+
+  /* ── Stats row ── */
+  .stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  .stat-card {
+    flex: 1; min-width: 120px; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px 16px;
+  }
+  .stat-card .val { font-size: 26px; font-weight: 700; color: var(--purple); }
+  .stat-card .lbl { font-size: 11px; color: var(--gray); margin-top: 2px; }
+
+  /* ── Disabled / loading states ── */
+  .center-msg {
+    text-align: center; padding: 60px 20px; color: var(--gray); font-size: 16px;
+  }
+  .spinner { display: inline-block; width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--purple); border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Table ── */
+  .tbl-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  thead tr { background: var(--bg2); }
+  thead th {
+    padding: 11px 12px; text-align: left; font-size: 11px; color: var(--gray);
+    text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--border);
+    white-space: nowrap; cursor: pointer; user-select: none;
+  }
+  thead th:hover { color: var(--text); }
+  thead th .sort-icon { margin-left: 4px; opacity: .5; }
+  tbody tr { border-bottom: 1px solid var(--border); cursor: pointer; transition: background .15s; }
+  tbody tr:hover { background: var(--bg2); }
+  td { padding: 10px 12px; vertical-align: middle; white-space: nowrap; }
+
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;
+  }
+  .badge-buy  { background: #052e16; color: #4ade80; }
+  .badge-sell { background: #2d1b1b; color: #f87171; }
+  .badge-code {
+    background: #1e1b4b; color: #a5b4fc; border: 1px solid #3730a3;
+    font-size: 10px; padding: 1px 6px; border-radius: 3px; font-family: monospace;
+  }
+  .count-badge {
+    display: inline-block; background: var(--bg3); color: var(--yellow);
+    border-radius: 99px; padding: 1px 7px; font-size: 11px; margin-left: 4px;
+  }
+  .more-reasons { color: var(--gray); font-size: 11px; }
+
+  /* ── Detail drawer ── */
+  .drawer-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 100;
+  }
+  .drawer-overlay.open { display: block; }
+  .drawer {
+    position: fixed; right: 0; top: 0; bottom: 0; width: min(540px, 100vw);
+    background: var(--bg1); border-left: 1px solid var(--border);
+    overflow-y: auto; padding: 24px; z-index: 101;
+    transform: translateX(100%); transition: transform .25s ease;
+  }
+  .drawer.open { transform: translateX(0); }
+  .drawer-close { float: right; background: none; border: none; color: var(--gray); font-size: 20px; cursor: pointer; }
+  .drawer-close:hover { color: var(--text); }
+  .drawer h2 { font-size: 16px; color: var(--purple); margin-bottom: 16px; }
+  .drawer h3 { font-size: 13px; color: var(--gray); text-transform: uppercase; letter-spacing: .05em; margin: 20px 0 8px; }
+
+  .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+  .meta-item .lbl { font-size: 11px; color: var(--gray); }
+  .meta-item .val { font-size: 14px; color: var(--text); font-weight: 600; }
+
+  .reason-card {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px 14px; margin-bottom: 8px;
+  }
+  .reason-card .code { font-family: monospace; font-size: 12px; color: #a5b4fc; margin-bottom: 6px; }
+  .reason-card .msg { color: var(--text); font-size: 13px; line-height: 1.5; }
+  .reason-card .rule { color: var(--gray); font-size: 11px; margin-top: 4px; }
+  .reason-card .rval { color: var(--yellow); font-size: 11px; }
+
+  .snap-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
+  .snap-item .lbl { font-size: 11px; color: var(--gray); }
+  .snap-item .val { font-size: 14px; font-weight: 600; }
+  .snap-item .val.warn { color: var(--yellow); }
+  .snap-item .val.danger { color: var(--red); }
+
+  .suggestion {
+    background: #0a1628; border: 1px solid #1d4ed8; border-radius: var(--radius);
+    padding: 12px 14px; margin-top: 16px; font-size: 13px; line-height: 1.6; color: var(--blue);
+  }
+  .suggestion strong { display: block; margin-bottom: 4px; color: #93c5fd; }
+
+  @media (max-width: 680px) {
+    main { padding: 12px; }
+    .meta-grid, .snap-grid { grid-template-columns: 1fr; }
+    .filters { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Top bar ─────────────────────────────────────────────────── -->
+<div class="topbar">
+  <a class="back" href="/">← Dashboard</a>
+  <h1>🚫 Rejected Trades Audit</h1>
+  <span id="featureFlag" class="flag-badge">Audit ON</span>
+  <span class="user-tag" id="userTag"></span>
+</div>
+
+<!-- ── Main ────────────────────────────────────────────────────── -->
+<main>
+  <!-- Filters -->
+  <div class="filters">
+    <div class="filter-group">
+      <label>Date</label>
+      <input type="date" id="filterDate" />
+    </div>
+    <div class="filter-group">
+      <label>Strategy</label>
+      <select id="filterStrategy">
+        <option value="">All Strategies</option>
+        <option>IntradayStrategy</option>
+        <option>SwingStrategy</option>
+        <option>MidTermStrategy</option>
+        <option>DividendStrategy</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Reason Code</label>
+      <select id="filterCode">
+        <option value="">All Reasons</option>
+        <option>AFTER_CUTOFF</option>
+        <option>DUPLICATE_SIGNAL</option>
+        <option>COST_FILTER</option>
+        <option>CME_HALTED</option>
+        <option>CME_CASH_RESERVE</option>
+        <option>CME_STRATEGY_CAP</option>
+        <option>CME_SECTOR_CAP</option>
+        <option>CME_INVALID_SL</option>
+        <option>CME_POSITION_TOO_SMALL</option>
+        <option>RISK_GOVERNANCE</option>
+        <option>RISK_DAILY_LOSS</option>
+        <option>RISK_CONSECUTIVE_LOSS</option>
+        <option>RISK_MAX_POSITIONS</option>
+        <option>RISK_TRADING_HALTED</option>
+        <option>NON_RETRYABLE_REJECTION</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Symbol</label>
+      <input type="text" id="filterSymbol" placeholder="e.g. RELIANCE" style="text-transform:uppercase;" />
+    </div>
+    <button class="btn btn-primary" onclick="loadData()">Apply</button>
+    <button class="btn btn-ghost" onclick="resetFilters()">Reset</button>
+  </div>
+
+  <!-- Stat cards -->
+  <div class="stats" id="statsRow" style="display:none;">
+    <div class="stat-card"><div class="val" id="statTotal">0</div><div class="lbl">Rejections Today</div></div>
+    <div class="stat-card"><div class="val" id="statSymbols">0</div><div class="lbl">Unique Symbols</div></div>
+    <div class="stat-card"><div class="val" id="statTopReason">—</div><div class="lbl">Top Reason</div></div>
+    <div class="stat-card"><div class="val" id="statCME">0</div><div class="lbl">CME Blocks</div></div>
+    <div class="stat-card"><div class="val" id="statRisk">0</div><div class="lbl">Risk Engine Blocks</div></div>
+  </div>
+
+  <!-- Content area -->
+  <div id="content">
+    <div class="center-msg"><div class="spinner"></div><p style="margin-top:14px;">Loading rejected trades…</p></div>
+  </div>
+</main>
+
+<!-- ── Detail Drawer ────────────────────────────────────────────── -->
+<div class="drawer-overlay" id="overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <button class="drawer-close" onclick="closeDrawer()">✕</button>
+  <h2 id="drawerTitle">Trade Detail</h2>
+  <div id="drawerBody"></div>
+</div>
+
+<script>
+// ── Auth guard ──────────────────────────────────────────────────
+const token = localStorage.getItem('access_token');
+if (!token) { window.location.href = '/'; }
+
+// ── State ───────────────────────────────────────────────────────
+let _allItems = [];
+
+// ── Init ────────────────────────────────────────────────────────
+(function init() {
+  const today = new Date().toISOString().slice(0, 10);
+  document.getElementById('filterDate').value = today;
+
+  fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+    .then(r => r.ok ? r.json() : null)
+    .then(u => { if (u) document.getElementById('userTag').textContent = `👤 ${u.username}`; })
+    .catch(() => {});
+
+  loadData();
+})();
+
+async function loadData() {
+  showLoading();
+  const date     = document.getElementById('filterDate').value;
+  const strategy = document.getElementById('filterStrategy').value;
+  const code     = document.getElementById('filterCode').value;
+  const symbol   = document.getElementById('filterSymbol').value.toUpperCase();
+
+  const params = new URLSearchParams();
+  if (date)     params.append('date', date);
+  if (strategy) params.append('strategy', strategy);
+  if (code)     params.append('reason_code', code);
+  if (symbol)   params.append('symbol', symbol);
+
+  try {
+    const res = await fetch(`/api/audit/rejected-trades?${params}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (res.status === 401) { window.location.href = '/'; return; }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    if (!data.audit_enabled) {
+      showDisabled();
+      return;
+    }
+    _allItems = data.items || [];
+    render(_allItems, data.date);
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
+function resetFilters() {
+  document.getElementById('filterStrategy').value = '';
+  document.getElementById('filterCode').value = '';
+  document.getElementById('filterSymbol').value = '';
+  loadData();
+}
+
+function render(items, dateStr) {
+  updateStats(items);
+
+  const content = document.getElementById('content');
+  if (items.length === 0) {
+    document.getElementById('statsRow').style.display = 'flex';
+    content.innerHTML = `<div class="center-msg" style="color:var(--green);">✅ No rejected trades on ${dateStr || 'today'}.</div>`;
+    return;
+  }
+
+  document.getElementById('statsRow').style.display = 'flex';
+  content.innerHTML = `
+    <div class="tbl-wrap">
+      <table id="mainTable">
+        <thead><tr>
+          <th>Time</th><th>Symbol</th><th>Strategy</th>
+          <th>Side</th><th>Type</th><th>Qty</th><th>Exposure</th>
+          <th>Primary Reason</th><th>All Reasons</th>
+          <th>Drawdown</th><th>Cash %</th><th>Regime</th><th>Count</th>
+        </tr></thead>
+        <tbody id="tblBody"></tbody>
+      </table>
+    </div>`;
+
+  const tbody = document.getElementById('tblBody');
+  items.forEach((item, idx) => {
+    const tr = document.createElement('tr');
+    tr.onclick = () => openDrawer(item);
+
+    const t = new Date(item.latest_at || item.first_at);
+    const timeStr = t.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+    const allCodes = (item.reasons || []).map(r => r.code);
+    const moreCount = allCodes.length - 1;
+    const allCodesHtml = allCodes.length > 1
+      ? `<span class="more-reasons">+${moreCount} more</span>`
+      : '';
+
+    const snap = item.risk_snapshot || {};
+    const dd = snap.drawdown_pct != null ? `${snap.drawdown_pct.toFixed(1)}%` : '—';
+    const ddClass = (snap.drawdown_pct || 0) >= 8 ? 'color:var(--red)' : '';
+    const totalCap = (snap.portfolio_equity || 0) + (snap.cash_available || 0);
+    const cashPct = totalCap > 0
+      ? ((snap.cash_available / totalCap) * 100).toFixed(1) + '%'
+      : (snap.cash_available != null ? snap.cash_available.toLocaleString() : '—');
+    const regime = snap.regime || '—';
+
+    tr.innerHTML = `
+      <td>${timeStr}</td>
+      <td><strong>${esc(item.symbol)}</strong></td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;">${esc(item.strategy_name)}</td>
+      <td><span class="badge badge-${item.side.toLowerCase()}">${esc(item.side)}</span></td>
+      <td style="color:var(--gray);">${esc(item.order_type)}</td>
+      <td>${item.quantity_requested || '—'}</td>
+      <td>${item.exposure_requested ? '₹' + fmt(item.exposure_requested) : '—'}</td>
+      <td><span class="badge-code">${esc(item.primary_reason_code)}</span></td>
+      <td>${allCodes.slice(1).map(c => `<span class="badge-code">${esc(c)}</span>`).join(' ')} ${allCodesHtml}</td>
+      <td style="${ddClass}">${dd}</td>
+      <td>${cashPct}</td>
+      <td style="color:var(--gray);font-size:12px;">${esc(regime)}</td>
+      <td>${item.count > 1 ? `<span class="count-badge">×${item.count}</span>` : '1'}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function updateStats(items) {
+  document.getElementById('statTotal').textContent = items.length;
+  const symbols = new Set(items.map(i => i.symbol));
+  document.getElementById('statSymbols').textContent = symbols.size;
+
+  const codeCounts = {};
+  items.forEach(i => {
+    (i.reasons || []).forEach(r => { codeCounts[r.code] = (codeCounts[r.code] || 0) + 1; });
+  });
+  const topCode = Object.entries(codeCounts).sort((a, b) => b[1] - a[1])[0];
+  document.getElementById('statTopReason').textContent = topCode ? topCode[0] : '—';
+
+  const cme = items.filter(i => (i.primary_reason_code || '').startsWith('CME_')).length;
+  const risk = items.filter(i => (i.primary_reason_code || '').startsWith('RISK_')).length;
+  document.getElementById('statCME').textContent = cme;
+  document.getElementById('statRisk').textContent = risk;
+}
+
+// ── Drawer ──────────────────────────────────────────────────────
+function openDrawer(item) {
+  document.getElementById('drawerTitle').textContent =
+    `${item.symbol} — ${item.strategy_name}`;
+  document.getElementById('drawerBody').innerHTML = buildDrawerHtml(item);
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('drawer').classList.add('open');
+}
+
+function closeDrawer() {
+  document.getElementById('overlay').classList.remove('open');
+  document.getElementById('drawer').classList.remove('open');
+}
+
+function buildDrawerHtml(item) {
+  const snap = item.risk_snapshot || {};
+  const t = new Date(item.first_at);
+  const timeStr = t.toLocaleString('en-IN');
+
+  // Meta
+  let html = `<div class="meta-grid">
+    <div class="meta-item"><div class="lbl">Symbol</div><div class="val">${esc(item.symbol)} (${esc(item.exchange)})</div></div>
+    <div class="meta-item"><div class="lbl">Strategy</div><div class="val">${esc(item.strategy_name)}</div></div>
+    <div class="meta-item"><div class="lbl">Side / Type</div><div class="val">${esc(item.side)} · ${esc(item.order_type)}</div></div>
+    <div class="meta-item"><div class="lbl">First Seen</div><div class="val">${timeStr}</div></div>
+    <div class="meta-item"><div class="lbl">Occurrences</div><div class="val">${item.count}×</div></div>
+    <div class="meta-item"><div class="lbl">Qty / Exposure</div><div class="val">${item.quantity_requested} / ${item.exposure_requested ? '₹' + fmt(item.exposure_requested) : '—'}</div></div>
+    ${item.entry_price  ? `<div class="meta-item"><div class="lbl">Entry Price</div><div class="val">₹${fmt(item.entry_price)}</div></div>` : ''}
+    ${item.stop_loss    ? `<div class="meta-item"><div class="lbl">Stop Loss</div><div class="val">₹${fmt(item.stop_loss)}</div></div>` : ''}
+    ${item.target       ? `<div class="meta-item"><div class="lbl">Target</div><div class="val">₹${fmt(item.target)}</div></div>` : ''}
+  </div>`;
+
+  // Reasons
+  html += '<h3>Rejection Reasons</h3>';
+  (item.reasons || []).forEach((r, i) => {
+    html += `<div class="reason-card">
+      <div class="code">#${i + 1} · <span style="color:var(--purple)">${esc(r.code)}</span></div>
+      <div class="msg">${esc(r.message)}</div>
+      <div class="rule">Rule: <code>${esc(r.rule_name)}</code></div>
+      ${r.rule_value ? `<div class="rval">Values: ${esc(r.rule_value)}</div>` : ''}
+    </div>`;
+  });
+
+  // Risk snapshot
+  if (Object.keys(snap).length) {
+    html += '<h3>Risk Snapshot at Decision Time</h3><div class="snap-grid">';
+    const fields = [
+      ['portfolio_equity',      'Portfolio Equity', v => '₹' + fmt(v)],
+      ['cash_available',        'Cash Available',   v => '₹' + fmt(v)],
+      ['exposure_pct',          'Exposure %',       v => v.toFixed(1) + '%'],
+      ['drawdown_pct',          'Drawdown %',       v => v.toFixed(1) + '%', v => v >= 8 ? 'danger' : ''],
+      ['sector_exposure_pct',   'Sector Exp %',     v => v.toFixed(1) + '%', v => v >= 25 ? 'warn' : ''],
+      ['strategy_exposure_pct', 'Strategy Exp %',   v => v.toFixed(1) + '%'],
+      ['regime',                'Market Regime',    v => v],
+      ['vix_proxy',             'VIX Proxy',        v => v != null ? v.toFixed(2) : '—'],
+    ];
+    fields.forEach(([key, label, fmt2, cls2]) => {
+      if (snap[key] == null) return;
+      const formatted = fmt2(snap[key]);
+      const cls = cls2 ? cls2(snap[key]) : '';
+      html += `<div class="snap-item"><div class="lbl">${label}</div><div class="val ${cls}">${formatted}</div></div>`;
+    });
+    html += '</div>';
+  }
+
+  // Suggested fix
+  html += buildSuggestion(item);
+  return html;
+}
+
+function buildSuggestion(item) {
+  const codes = (item.reasons || []).map(r => r.code);
+  const suggestions = {
+    CME_HALTED:           'Portfolio drawdown ≥ 12%. Wait for recovery or reduce open risk. No new trades until drawdown falls below 8%.',
+    CME_CASH_RESERVE:     'Cash reserve floor hit. Close an existing position to free up capital, or wait for a position to exit.',
+    CME_STRATEGY_CAP:     'Strategy bucket is fully allocated. Rebalance or wait for existing positions in this strategy to close.',
+    CME_SECTOR_CAP:       'Sector concentration limit (30%) reached. Diversify to a different sector.',
+    CME_INVALID_SL:       'Stop loss must be strictly below entry price. Review signal generation logic.',
+    CME_POSITION_TOO_SMALL: 'Risk per trade too small after cost-sizing. Increase stop-distance or use a higher-priced stock.',
+    COST_FILTER:          'Transaction costs exceed 25% of expected profit. Widen the target or trade higher-priced/higher-volume stocks.',
+    RISK_DAILY_LOSS:      'Daily loss limit reached. Trading will resume tomorrow.',
+    RISK_CONSECUTIVE_LOSS:'Consecutive loss pause active. Wait for the pause to expire before new entries.',
+    RISK_MAX_POSITIONS:   'Maximum open positions reached. Close or wait for an existing position before adding new ones.',
+    RISK_GOVERNANCE:      'Governance policy block. Review system mode and governance configuration.',
+    AFTER_CUTOFF:         'Signal generated outside the intraday window (09:15–15:20 IST). Strategy ran too late in the day.',
+    DUPLICATE_SIGNAL:     'A position for this symbol already exists. Dedup check prevented a duplicate entry.',
+  };
+
+  const first = codes[0];
+  const msg = suggestions[first];
+  if (!msg) return '';
+  return `<div class="suggestion"><strong>💡 Suggested Fix</strong>${msg}</div>`;
+}
+
+// ── Helpers ─────────────────────────────────────────────────────
+function showLoading() {
+  document.getElementById('statsRow').style.display = 'none';
+  document.getElementById('content').innerHTML =
+    `<div class="center-msg"><div class="spinner"></div><p style="margin-top:14px;">Loading…</p></div>`;
+}
+function showDisabled() {
+  document.getElementById('featureFlag').textContent = 'Audit OFF';
+  document.getElementById('featureFlag').classList.add('off');
+  document.getElementById('statsRow').style.display = 'none';
+  document.getElementById('content').innerHTML =
+    `<div class="center-msg">🔴 Rejected trades audit is disabled.<br><span style="font-size:12px;color:var(--gray);">Set REJECTED_TRADES_AUDIT_ENABLED=true in .env to enable.</span></div>`;
+}
+function showError(msg) {
+  document.getElementById('statsRow').style.display = 'none';
+  document.getElementById('content').innerHTML =
+    `<div class="center-msg" style="color:var(--red);">⚠️ Error: ${esc(msg)}</div>`;
+}
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function fmt(n) {
+  if (n == null) return '—';
+  return Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+}
+</script>
+</body>
+</html>

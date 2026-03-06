@@ -336,3 +336,49 @@ class AllocationTargets(Base):
 
     def __repr__(self):
         return f"<AllocationTargets id={self.id} regime={self.regime} at={self.computed_at}>"
+
+
+class RejectedTrade(Base):
+    """Audit log of trade signals rejected by the approval pipeline.
+
+    Deduplication: same (user_id, symbol, strategy_name, side) within
+    DEDUP_WINDOW_MINUTES are merged — only count + latest_at are updated.
+    Retention: configurable, default 30 days. Cleaned up by daily job.
+    """
+    __tablename__ = "rejected_trades"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Scoping
+    user_id = Column(String(100), nullable=False, index=True)
+
+    # Signal identity
+    symbol = Column(String(50), nullable=False, index=True)
+    exchange = Column(String(20), default="NSE")
+    strategy_name = Column(String(100), nullable=False, index=True)
+    side = Column(String(10), nullable=False)          # BUY / SELL
+    order_type = Column(String(20), default="CNC")     # CNC / MIS
+
+    # Intended trade details
+    entry_price = Column(Float, nullable=True)
+    stop_loss = Column(Float, nullable=True)
+    target = Column(Float, nullable=True)
+    quantity_requested = Column(Integer, default=0)
+    exposure_requested = Column(Float, default=0.0)    # qty * entry_price
+
+    # Rejection reasons — JSON array of {code, message, rule_name, rule_value}
+    reasons = Column(Text, nullable=False, default="[]")
+
+    # Portfolio risk snapshot at decision time — JSON object
+    risk_snapshot = Column(Text, nullable=True)
+
+    # Timestamps + dedup count
+    first_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    latest_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    count = Column(Integer, default=1)
+
+    def __repr__(self):
+        return (
+            f"<RejectedTrade id={self.id} symbol={self.symbol} "
+            f"strategy={self.strategy_name} count={self.count}>"
+        )
