@@ -105,3 +105,47 @@ async def get_rejected_trade(
     if record is None:
         raise HTTPException(status_code=404, detail="Record not found")
     return record
+
+
+@router.post("/api/audit/rejected-trades/test-seed")
+async def seed_test_rejection(
+    current_user: dict = Depends(_current_user),
+    db=Depends(_get_db()),
+):
+    """Insert one synthetic rejection record tagged with the current user's id.
+    Use this to verify the table exists and the API is wired correctly.
+    Only available when REJECTED_TRADES_AUDIT_ENABLED=true.
+    """
+    if not getattr(settings, "rejected_trades_audit_enabled", True):
+        raise HTTPException(status_code=403, detail="Audit disabled")
+
+    from rejected_trades import RejectedTradesService, RejectionReason, RiskSnapshot
+    svc = RejectedTradesService(db)
+    svc.log_rejection(
+        user_id=current_user["id"],
+        symbol="TEST",
+        strategy_name="TestStrategy",
+        side="BUY",
+        order_type="CNC",
+        entry_price=1000.0,
+        stop_loss=980.0,
+        target=1060.0,
+        quantity=5,
+        reasons=[
+            RejectionReason(
+                code="CME_HALTED",
+                message="[TEST] Portfolio drawdown ≥ 12% — trading halted.",
+                rule_name="capital_manager.approve_trade.CME_HALTED",
+                rule_value="drawdown=12.5%,threshold=12%",
+            )
+        ],
+        snapshot=RiskSnapshot(
+            portfolio_equity=95000.0,
+            cash_available=12000.0,
+            exposure_pct=62.0,
+            drawdown_pct=12.5,
+            regime="BEAR",
+        ),
+    )
+    return {"ok": True, "user_id": current_user["id"],
+            "message": "Test rejection logged — refresh the audit page."}

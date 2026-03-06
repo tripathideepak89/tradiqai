@@ -204,6 +204,7 @@
     </div>
     <button class="btn btn-primary" onclick="loadData()">Apply</button>
     <button class="btn btn-ghost" onclick="resetFilters()">Reset</button>
+    <button class="btn btn-ghost" id="seedBtn" onclick="seedTest()" title="Insert a synthetic test record to verify the feature is working" style="border-color:#6b7280;margin-left:auto;">🧪 Test Seed</button>
   </div>
 
   <!-- Stat cards -->
@@ -295,7 +296,15 @@ function render(items, dateStr) {
   const content = document.getElementById('content');
   if (items.length === 0) {
     document.getElementById('statsRow').style.display = 'flex';
-    content.innerHTML = `<div class="center-msg" style="color:var(--green);">✅ No rejected trades on ${dateStr || 'today'}.</div>`;
+    content.innerHTML = `
+      <div class="center-msg">
+        <div style="color:var(--green);font-size:18px;margin-bottom:12px;">✅ No rejected trades on ${dateStr || 'today'}.</div>
+        <p style="color:var(--gray);font-size:13px;max-width:480px;margin:0 auto;">
+          Rejections are logged automatically when the trading bot blocks a signal.
+          If this is a fresh deployment, click <strong style="color:var(--purple);">🧪 Test Seed</strong>
+          in the filters bar to insert a synthetic record and verify the feature works.
+        </p>
+      </div>`;
     return;
   }
 
@@ -472,6 +481,28 @@ function showLoading() {
   document.getElementById('content').innerHTML =
     `<div class="center-msg"><div class="spinner"></div><p style="margin-top:14px;">Loading…</p></div>`;
 }
+async function seedTest() {
+  const btn = document.getElementById('seedBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Seeding…';
+  try {
+    const res = await fetch('/api/audit/rejected-trades/test-seed', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const data = await res.json();
+    if (res.ok) {
+      btn.textContent = '✅ Seeded';
+      setTimeout(() => loadData(), 800);
+    } else {
+      btn.textContent = '❌ ' + (data.detail || 'Error');
+    }
+  } catch (e) {
+    btn.textContent = '❌ Failed';
+  }
+  setTimeout(() => { btn.disabled = false; btn.textContent = '🧪 Test Seed'; }, 3000);
+}
+
 function showDisabled() {
   document.getElementById('featureFlag').textContent = 'Audit OFF';
   document.getElementById('featureFlag').classList.add('off');

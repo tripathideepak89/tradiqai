@@ -136,10 +136,26 @@ class TradingSystem:
             )
 
             # 4b. Initialize order manager (pass CME as gatekeeper)
+            # Auto-detect the Supabase UUID of the primary trading account so
+            # rejected-trade audit records are visible in the dashboard.
+            # Falls back to the TRADING_ACCOUNT_USER_ID env var, then "system".
+            _trading_uid = getattr(settings, "trading_account_user_id", None) or ""
+            if not _trading_uid:
+                try:
+                    from tradiqai_supabase_config import get_supabase_admin as _get_supa
+                    _supa = _get_supa()
+                    _u = _supa.table("users").select("id").eq("is_active", True).limit(1).execute()
+                    if _u.data:
+                        _trading_uid = _u.data[0]["id"]
+                        logger.info(f"[OK] Trading account user_id auto-detected: {str(_trading_uid)[:8]}…")
+                except Exception as _uid_err:
+                    logger.warning(f"[WARN] Could not auto-detect trading user_id: {_uid_err}")
+            _trading_uid = _trading_uid or "system"
+
             self.order_manager = OrderManager(
                 self.broker, self.risk_engine, self.db,
                 capital_manager=self.capital_manager,
-                user_id=getattr(settings, "trading_account_user_id", None) or "system",
+                user_id=_trading_uid,
             )
             logger.info("[OK] Order manager initialized")
             
