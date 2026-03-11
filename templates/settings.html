@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TradiqAI - Broker Settings</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #1a1a24;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0b0;
+            --accent-primary: #00c4ff;
+            --accent-secondary: #6366f1;
+            --success: #22c55e;
+            --warning: #f5c518;
+            --danger: #ef4444;
+            --border: #2a2a3a;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+        
+        .navbar {
+            background: rgba(10, 10, 15, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            padding: 1rem 2rem;
+        }
+        
+        .nav-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+        
+        .logo-icon { font-size: 1.8rem; }
+        
+        .nav-links {
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
+        }
+        
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.2s;
+        }
+        
+        .nav-links a:hover { color: var(--text-primary); }
+        
+        .nav-links a.active { color: var(--accent-primary); }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 100px 2rem 4rem;
+        }
+        
+        .page-header {
+            margin-bottom: 2rem;
+        }
+        
+        .page-title {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+        
+        .page-subtitle {
+            color: var(--text-secondary);
+            font-size: 1rem;
+        }
+        
+        .settings-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .card-icon {
+            font-size: 1.5rem;
+        }
+        
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: var(--text-secondary);
+        }
+        
+        .form-select, .form-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 1rem;
+            font-family: inherit;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        
+        .form-select:focus, .form-input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(0, 196, 255, 0.1);
+        }
+        
+        .form-select option {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+        
+        .form-help {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+        }
+        
+        .broker-fields {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        .broker-fields.active {
+            display: block;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .broker-logo {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+        }
+        
+        .broker-logo img {
+            width: 48px;
+            height: 48px;
+            border-radius: 8px;
+        }
+        
+        .broker-logo-placeholder {
+            width: 48px;
+            height: 48px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+        
+        .broker-info h4 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+        
+        .broker-info p {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            font-family: inherit;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 196, 255, 0.3);
+        }
+        
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+        
+        .btn-secondary:hover {
+            background: var(--bg-card);
+        }
+        
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+        
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .alert-success {
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            color: var(--success);
+        }
+        
+        .alert-warning {
+            background: rgba(245, 197, 24, 0.1);
+            border: 1px solid rgba(245, 197, 24, 0.3);
+            color: var(--warning);
+        }
+        
+        .alert-error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: var(--danger);
+        }
+        
+        .alert-icon {
+            font-size: 1.25rem;
+        }
+        
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        
+        .status-connected {
+            background: rgba(34, 197, 94, 0.1);
+            color: var(--success);
+        }
+        
+        .status-disconnected {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+        }
+        
+        .password-wrapper {
+            position: relative;
+        }
+        
+        .password-toggle {
+            position: absolute;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        
+        .password-toggle:hover {
+            color: var(--text-primary);
+        }
+        
+        .divider {
+            height: 1px;
+            background: var(--border);
+            margin: 1.5rem 0;
+        }
+        
+        .footer-note {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin-top: 2rem;
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+        }
+        
+        .footer-note a {
+            color: var(--accent-primary);
+            text-decoration: none;
+        }
+        
+        .footer-note a:hover {
+            text-decoration: underline;
+        }
+        
+        #status-message {
+            display: none;
+        }
+        
+        #status-message.show {
+            display: flex;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-content">
+            <a href="/" class="logo">
+                <span class="logo-icon">🤖</span>
+                <span>TradiqAI</span>
+            </a>
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <a href="/dividend-radar">Dividend Radar</a>
+                <a href="/settings" class="active">Settings</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="page-header">
+            <h1 class="page-title">⚙️ Broker Settings</h1>
+            <p class="page-subtitle">Configure your broker connection and API credentials</p>
+        </div>
+
+        <div id="status-message" class="alert">
+            <span class="alert-icon"></span>
+            <span class="alert-text"></span>
+        </div>
+
+        <!-- Broker Selection -->
+        <div class="settings-card">
+            <div class="card-header">
+                <span class="card-icon">🔌</span>
+                <h2 class="card-title">Broker Connection</h2>
+            </div>
+
+            <form id="broker-form">
+                <div class="form-group">
+                    <label class="form-label">Select Broker</label>
+                    <select id="broker-select" class="form-select" required>
+                        <option value="">-- Choose a broker --</option>
+                        <option value="zerodha">Zerodha (Kite Connect)</option>
+                        <option value="groww">Groww</option>
+                        <option value="upstox">Upstox</option>
+                        <option value="angelone">Angel One</option>
+                        <option value="fyers">Fyers</option>
+                        <option value="paper">Paper Trading (No Broker)</option>
+                    </select>
+                    <p class="form-help">Choose your trading broker. API credentials will be securely stored.</p>
+                </div>
+
+                <!-- Zerodha Fields -->
+                <div id="zerodha-fields" class="broker-fields">
+                    <div class="broker-logo">
+                        <div class="broker-logo-placeholder">Z</div>
+                        <div class="broker-info">
+                            <h4>Zerodha Kite Connect</h4>
+                            <p>India's largest retail broker</p>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">API Key</label>
+                        <input type="text" id="zerodha-api-key" class="form-input" placeholder="Enter your Kite Connect API Key">
+                        <p class="form-help">Found in Kite Connect developer portal</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">API Secret</label>
+                        <div class="password-wrapper">
+                            <input type="password" id="zerodha-api-secret" class="form-input" placeholder="Enter your API Secret">
+                            <button type="button" class="password-toggle" onclick="togglePassword('zerodha-api-secret')">👁️</button>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">User ID</label>
+                        <input type="text" id="zerodha-user-id" class="form-input" placeholder="Your Zerodha User ID (e.g., AB1234)">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">TOTP Secret (Optional)</label>
+                        <div class="password-wrapper">
+                            <input type="password" id="zerodha-totp-secret" class="form-input" placeholder="For automated 2FA login">
+                            <button type="button" class="password-toggle" onclick="togglePassword('zerodha-totp-secret')">👁️</button>
+                        </div>
+                        <p class="form-help">Required for fully automated login. Get from authenticator app setup.</p>
+                    </div>
+                </div>
+
+                <!-- Groww Fields -->
+                <div id="groww-fields" class="broker-fields">
+                    <div class="broker-logo">
+                        <div class="broker-logo-placeholder" style="background: linear-gradient(135deg, #00d09c, #00b386);">G</div>
+                        <div class="broker-info">
+                            <h4>Groww</h4>
+                            <p>Simple & transparent investing</p>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">API Key</label>
+                        <input type="text" id="groww-api-key" class="form-input" placeholder="Enter your Groww API Key">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">API Secret</label>
+                        <div class="password-wrapper">
+                            <input type="password" id="groww-api-secret" class="form-input" placeholder="Enter your API Secret">
+                            <button type="button" class="password-toggle" onclick="togglePassword('groww-api-secret')">👁️</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Upstox Fields -->
+                <div id="upstox-fields" class="broker-fields">
+                    <div class="broker-logo">
+                        <div class="broker-logo-placeholder" style="background: linear-gradient(135deg, #7b2cf5, #5a1fc7);">U</div>
+                        <div class="broker-info">
+                            <h4>Upstox</h4>
+                            <p>Pro trading platform</p>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">API Key</label>
+                        <input type="text" id="upstox-api-key" class="form-input" placeholder="Enter your Upstox API Key">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">API Secret</label>
+                        <div class="password-wrapper">
+                            <input type="password" id="upstox-api-secret" class="form-input" placeholder="Enter your API Secret">
+                            <button type="button" class="password-toggle" onclick="togglePassword('upstox-api-secret')">👁️</button>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Redirect URI</label>
+                        <input type="text" id="upstox-redirect-uri" class="form-input" placeholder="https://your-app.com/callback" value="http://localhost:8000/callback">
+                    </div>
+                </div>
+
+                <!-- Angel One Fields -->
+                <div id="angelone-fields" class="broker-fields">
+                    <div class="broker-logo">
+                        <div class="broker-logo-placeholder" style="background: linear-gradient(135deg, #ff6b35, #e85d2e);">A</div>
+                        <div class="broker-info">
+                            <h4>Angel One (SmartAPI)</h4>
+                            <p>Full-service stockbroker</p>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">API Key</label>
+                        <input type="text" id="angelone-api-key" class="form-input" placeholder="Enter your SmartAPI Key">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Client ID</label>
+                        <input type="text" id="angelone-client-id" class="form-input" placeholder="Your Angel One Client ID">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Password</label>
+                        <div class="password-wrapper">
+                            <input type="password" id="angelone-password" class="form-input" placeholder="Your trading password">
+                            <button type="button" class="password-toggle" onclick="togglePassword('angelone-password')">👁️</button>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">TOTP Secret</label>
+                        <div class="password-wrapper">
+                            <input type="password" id="angelone-totp" class="form-input" placeholder="For 2FA authentication">
+                            <button type="button" class="password-toggle" onclick="togglePassword('angelone-totp')">👁️</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fyers Fields -->
+                <div id="fyers-fields" class="broker-fields">
+                    <div class="broker-logo">
+                        <div class="broker-logo-placeholder" style="background: linear-gradient(135deg, #1e88e5, #1565c0);">F</div>
+                        <div class="broker-info">
+                            <h4>Fyers</h4>
+                            <p>Trade smarter, trade better</p>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">App ID</label>
+                        <input type="text" id="fyers-app-id" class="form-input" placeholder="Enter your Fyers App ID">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Secret Key</label>
+                        <div class="password-wrapper">
+                            <input type="password" id="fyers-secret-key" class="form-input" placeholder="Enter your Secret Key">
+                            <button type="button" class="password-toggle" onclick="togglePassword('fyers-secret-key')">👁️</button>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Redirect URI</label>
+                        <input type="text" id="fyers-redirect-uri" class="form-input" placeholder="https://your-app.com/callback" value="http://localhost:8000/callback">
+                    </div>
+                </div>
+
+                <!-- Paper Trading Fields -->
+                <div id="paper-fields" class="broker-fields">
+                    <div class="broker-logo">
+                        <div class="broker-logo-placeholder" style="background: linear-gradient(135deg, #22c55e, #16a34a);">📝</div>
+                        <div class="broker-info">
+                            <h4>Paper Trading Mode</h4>
+                            <p>Practice with simulated trades - no real money</p>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <span class="alert-icon">⚠️</span>
+                        <span>Paper trading mode simulates trades without connecting to a real broker. Perfect for testing strategies!</span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Starting Capital (₹)</label>
+                        <input type="number" id="paper-capital" class="form-input" placeholder="50000" value="50000">
+                        <p class="form-help">Simulated capital for paper trading</p>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="btn-group">
+                    <button type="submit" class="btn btn-primary" id="save-btn">
+                        <span id="save-btn-text">💾 Save Configuration</span>
+                        <span id="save-btn-loading" class="loading" style="display:none;"></span>
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="testConnection()">
+                        🔗 Test Connection
+                    </button>
+                    <button type="button" class="btn btn-danger" onclick="clearConfig()">
+                        🗑️ Clear
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Connection Status -->
+        <div class="settings-card">
+            <div class="card-header">
+                <span class="card-icon">📊</span>
+                <h2 class="card-title">Connection Status</h2>
+            </div>
+            
+            <div id="connection-status">
+                <span class="status-badge status-disconnected">
+                    <span>●</span> Not Connected
+                </span>
+            </div>
+            
+            <div id="broker-details" style="margin-top: 1rem; display: none;">
+                <p style="color: var(--text-secondary); font-size: 0.875rem;">
+                    <strong>Current Broker:</strong> <span id="current-broker">-</span><br>
+                    <strong>Last Verified:</strong> <span id="last-verified">-</span>
+                </p>
+            </div>
+        </div>
+
+        <div class="footer-note">
+            🔒 Your API credentials are encrypted and stored securely.<br>
+            Need help? <a href="https://docs.tradiqai.com/BROKER_SETUP.html" target="_blank">View Broker Setup Guide</a>
+        </div>
+    </div>
+
+    <script>
+        // Broker field mappings
+        const brokerFields = {
+            zerodha: ['zerodha-api-key', 'zerodha-api-secret', 'zerodha-user-id', 'zerodha-totp-secret'],
+            groww: ['groww-api-key', 'groww-api-secret'],
+            upstox: ['upstox-api-key', 'upstox-api-secret', 'upstox-redirect-uri'],
+            angelone: ['angelone-api-key', 'angelone-client-id', 'angelone-password', 'angelone-totp'],
+            fyers: ['fyers-app-id', 'fyers-secret-key', 'fyers-redirect-uri'],
+            paper: ['paper-capital']
+        };
+
+        // Show/hide broker fields based on selection
+        document.getElementById('broker-select').addEventListener('change', function(e) {
+            // Hide all fields
+            document.querySelectorAll('.broker-fields').forEach(el => el.classList.remove('active'));
+            
+            // Show selected broker fields
+            const broker = e.target.value;
+            if (broker) {
+                const fieldsEl = document.getElementById(`${broker}-fields`);
+                if (fieldsEl) fieldsEl.classList.add('active');
+            }
+        });
+
+        // Toggle password visibility
+        function togglePassword(inputId) {
+            const input = document.getElementById(inputId);
+            input.type = input.type === 'password' ? 'text' : 'password';
+        }
+
+        // Show status message
+        function showStatus(type, message) {
+            const statusEl = document.getElementById('status-message');
+            const iconMap = { success: '✅', warning: '⚠️', error: '❌' };
+            
+            statusEl.className = `alert alert-${type} show`;
+            statusEl.querySelector('.alert-icon').textContent = iconMap[type];
+            statusEl.querySelector('.alert-text').textContent = message;
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                statusEl.classList.remove('show');
+            }, 5000);
+        }
+
+        // Collect form data
+        function getFormData() {
+            const broker = document.getElementById('broker-select').value;
+            if (!broker) return null;
+
+            const config = { broker };
+            
+            if (brokerFields[broker]) {
+                brokerFields[broker].forEach(fieldId => {
+                    const el = document.getElementById(fieldId);
+                    if (el && el.value) {
+                        // Convert field ID to key name
+                        const key = fieldId.replace(`${broker}-`, '').replace(/-/g, '_');
+                        config[key] = el.value;
+                    }
+                });
+            }
+            
+            return config;
+        }
+
+        // Save configuration
+        document.getElementById('broker-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const data = getFormData();
+            if (!data) {
+                showStatus('error', 'Please select a broker');
+                return;
+            }
+
+            const saveBtn = document.getElementById('save-btn');
+            const btnText = document.getElementById('save-btn-text');
+            const btnLoading = document.getElementById('save-btn-loading');
+            
+            // Show loading state
+            btnText.style.display = 'none';
+            btnLoading.style.display = 'inline-block';
+            saveBtn.disabled = true;
+
+            try {
+                const response = await fetch('/api/broker/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    showStatus('success', 'Broker configuration saved successfully!');
+                    updateConnectionStatus(data.broker, true);
+                } else {
+                    const error = await response.json();
+                    showStatus('error', error.detail || 'Failed to save configuration');
+                }
+            } catch (err) {
+                showStatus('error', 'Network error. Please try again.');
+                console.error(err);
+            } finally {
+                btnText.style.display = 'inline';
+                btnLoading.style.display = 'none';
+                saveBtn.disabled = false;
+            }
+        });
+
+        // Test connection
+        async function testConnection() {
+            const data = getFormData();
+            if (!data) {
+                showStatus('error', 'Please select a broker and enter credentials');
+                return;
+            }
+
+            showStatus('warning', 'Testing connection...');
+
+            try {
+                const response = await fetch('/api/broker/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+                
+                if (response.ok && result.connected) {
+                    showStatus('success', `Connected to ${data.broker.toUpperCase()} successfully!`);
+                    updateConnectionStatus(data.broker, true);
+                } else {
+                    showStatus('error', result.message || 'Connection failed. Please check your credentials.');
+                    updateConnectionStatus(data.broker, false);
+                }
+            } catch (err) {
+                showStatus('error', 'Network error. Please try again.');
+                console.error(err);
+            }
+        }
+
+        // Clear configuration
+        function clearConfig() {
+            if (!confirm('Are you sure you want to clear all broker settings?')) return;
+            
+            document.getElementById('broker-form').reset();
+            document.querySelectorAll('.broker-fields').forEach(el => el.classList.remove('active'));
+            updateConnectionStatus(null, false);
+            showStatus('success', 'Configuration cleared');
+        }
+
+        // Update connection status display
+        function updateConnectionStatus(broker, connected) {
+            const statusEl = document.getElementById('connection-status');
+            const detailsEl = document.getElementById('broker-details');
+            
+            if (connected && broker) {
+                statusEl.innerHTML = `
+                    <span class="status-badge status-connected">
+                        <span>●</span> Connected
+                    </span>
+                `;
+                detailsEl.style.display = 'block';
+                document.getElementById('current-broker').textContent = broker.charAt(0).toUpperCase() + broker.slice(1);
+                document.getElementById('last-verified').textContent = new Date().toLocaleString();
+            } else {
+                statusEl.innerHTML = `
+                    <span class="status-badge status-disconnected">
+                        <span>●</span> Not Connected
+                    </span>
+                `;
+                detailsEl.style.display = 'none';
+            }
+        }
+
+        // Load existing configuration on page load
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/broker/config');
+                if (response.ok) {
+                    const config = await response.json();
+                    if (config && config.broker) {
+                        document.getElementById('broker-select').value = config.broker;
+                        document.getElementById('broker-select').dispatchEvent(new Event('change'));
+                        
+                        // Populate fields
+                        if (brokerFields[config.broker]) {
+                            brokerFields[config.broker].forEach(fieldId => {
+                                const key = fieldId.replace(`${config.broker}-`, '').replace(/-/g, '_');
+                                const el = document.getElementById(fieldId);
+                                if (el && config[key]) {
+                                    el.value = config[key];
+                                }
+                            });
+                        }
+                        
+                        updateConnectionStatus(config.broker, config.connected || false);
+                    }
+                }
+            } catch (err) {
+                console.log('No existing config found');
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', loadConfig);
+    </script>
+</body>
+</html>
