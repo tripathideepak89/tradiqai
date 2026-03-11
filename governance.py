@@ -136,6 +136,37 @@ class GovernanceEngine:
                 f"({alloc.allocation_percent}%, risk={alloc.risk_per_trade_percent}%)"
             )
     
+    def apply_risk_tolerance(self, risk_tolerance: int):
+        """Update governance limits based on user's risk tolerance (0-100).
+        
+        Adjusts:
+        - MAX_DAILY_LOSS
+        - MAX_TOTAL_DRAWDOWN  
+        - Layer risk per trade values
+        """
+        risk = max(0, min(100, risk_tolerance))
+        
+        # Interpolation helper
+        def lerp(min_val: float, max_val: float) -> float:
+            return min_val + (max_val - min_val) * (risk / 100.0)
+        
+        # Update global limits based on risk tolerance
+        self.MAX_DAILY_LOSS = lerp(1.0, 8.0)  # 1% (safe) to 8% (aggressive)
+        self.MAX_TOTAL_DRAWDOWN = lerp(8.0, 25.0)  # 8% (safe) to 25% (aggressive)
+        self.MAX_SINGLE_STOCK_EXPOSURE = lerp(15.0, 35.0)  # 15% (safe) to 35% (aggressive)
+        
+        # Update layer-specific risk per trade
+        risk_multiplier = lerp(0.5, 2.0)  # 0.5x (safe) to 2x (aggressive)
+        
+        for layer, alloc in self.layers.items():
+            base_risk = self.LAYER_ALLOCATIONS[layer]['risk_per_trade']
+            alloc.risk_per_trade_percent = base_risk * risk_multiplier
+        
+        logger.info(f"[GOVERNANCE] Risk tolerance applied: {risk}%")
+        logger.info(f"  MAX_DAILY_LOSS: {self.MAX_DAILY_LOSS:.1f}%")
+        logger.info(f"  MAX_DRAWDOWN: {self.MAX_TOTAL_DRAWDOWN:.1f}%")
+        logger.info(f"  Risk multiplier: {risk_multiplier:.2f}x")
+    
     def update_capital(self, current_capital: float):
         """Update current capital and check drawdown (Section 9)"""
         self.current_capital = current_capital

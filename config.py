@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     # Based on ₹50k capital model
     initial_capital: float = 50000.0  # User's available capital
     
+    # Risk Tolerance: 0-100 (affects all risk parameters dynamically)
+    risk_tolerance: int = 50  # 0=Ultra Safe, 50=Balanced, 100=Aggressive
+    
     # Risk Per Trade: Fixed ₹400 for ₹50k (0.8%)
     max_per_trade_risk: float = 400.0
     

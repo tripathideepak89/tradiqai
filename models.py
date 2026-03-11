@@ -28,6 +28,7 @@ class User(Base):
     broker_config = Column(Text, nullable=True)  # JSON string with broker credentials (encrypted)
     
     # Risk Settings (override defaults)
+    risk_tolerance = Column(Integer, default=50)  # 0-100, affects trading aggressiveness
     max_daily_loss = Column(Float, default=1500.0)
     max_position_risk = Column(Float, default=400.0)
     max_open_positions = Column(Integer, default=2)

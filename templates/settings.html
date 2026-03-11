@@ -391,6 +391,188 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        /* Risk Meter Styles */
+        .risk-meter-container {
+            margin-bottom: 2rem;
+        }
+
+        .risk-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-size: 0.75rem;
+        }
+
+        .risk-label.safe { color: var(--success); }
+        .risk-label.balanced { color: var(--warning); }
+        .risk-label.aggressive { color: var(--danger); }
+
+        .risk-slider-wrapper {
+            position: relative;
+            height: 40px;
+            margin-bottom: 1rem;
+        }
+
+        .risk-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 12px;
+            border-radius: 6px;
+            background: transparent;
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 2;
+            cursor: pointer;
+        }
+
+        .risk-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 196, 255, 0.4);
+            border: 3px solid white;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .risk-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+            box-shadow: 0 6px 20px rgba(0, 196, 255, 0.5);
+        }
+
+        .risk-slider::-moz-range-thumb {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            cursor: pointer;
+            border: 3px solid white;
+        }
+
+        .risk-track {
+            position: absolute;
+            width: 100%;
+            height: 12px;
+            border-radius: 6px;
+            background: linear-gradient(to right, 
+                #22c55e 0%, 
+                #22c55e 20%, 
+                #fbbf24 35%, 
+                #f5c518 50%, 
+                #f97316 65%,
+                #ef4444 80%,
+                #dc2626 100%
+            );
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 1;
+        }
+
+        .risk-track-fill {
+            position: absolute;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px 0 0 6px;
+            transition: width 0.2s;
+        }
+
+        .risk-value-display {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .risk-percentage {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .risk-label-current {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            padding: 0.25rem 1rem;
+            background: var(--bg-secondary);
+            border-radius: 20px;
+        }
+
+        .risk-summary {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .risk-params-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            .risk-params-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .risk-param {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .param-label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .param-value {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .risk-presets {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .preset-btn {
+            padding: 0.4rem 0.75rem;
+            border: 1px solid var(--border);
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            border-radius: 20px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .preset-btn:hover {
+            border-color: var(--accent-primary);
+            color: var(--text-primary);
+        }
+
+        .preset-btn.active {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border-color: transparent;
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -659,6 +841,96 @@
             </div>
         </div>
 
+        <!-- Risk Meter -->
+        <div class="settings-card">
+            <div class="card-header">
+                <span class="card-icon">⚡</span>
+                <h2 class="card-title">Risk Meter</h2>
+            </div>
+            
+            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">
+                Adjust your risk tolerance level. The trading system will automatically adjust position sizing, 
+                stop losses, and exposure limits based on your preference.
+            </p>
+
+            <div class="risk-meter-container">
+                <div class="risk-labels">
+                    <span class="risk-label safe">🛡️ Ultra Safe</span>
+                    <span class="risk-label balanced">⚖️ Balanced</span>
+                    <span class="risk-label aggressive">🚀 Aggressive</span>
+                </div>
+                
+                <div class="risk-slider-wrapper">
+                    <input type="range" id="risk-slider" min="0" max="100" value="50" class="risk-slider">
+                    <div class="risk-track">
+                        <div class="risk-track-fill" id="risk-track-fill"></div>
+                    </div>
+                </div>
+                
+                <div class="risk-value-display">
+                    <span class="risk-percentage" id="risk-percentage">50%</span>
+                    <span class="risk-label-current" id="risk-label-current">Balanced</span>
+                </div>
+            </div>
+
+            <div class="risk-summary" id="risk-summary">
+                <h4 style="margin-bottom: 1rem; font-size: 0.9rem; color: var(--text-secondary);">
+                    📋 Trading Parameters for this Risk Level:
+                </h4>
+                <div class="risk-params-grid">
+                    <div class="risk-param">
+                        <span class="param-label">Max Positions</span>
+                        <span class="param-value" id="param-positions">2</span>
+                    </div>
+                    <div class="risk-param">
+                        <span class="param-label">Risk/Trade</span>
+                        <span class="param-value" id="param-risk-trade">0.8%</span>
+                    </div>
+                    <div class="risk-param">
+                        <span class="param-label">Daily Loss Limit</span>
+                        <span class="param-value" id="param-daily-loss">3%</span>
+                    </div>
+                    <div class="risk-param">
+                        <span class="param-label">Max Exposure</span>
+                        <span class="param-value" id="param-exposure">50%</span>
+                    </div>
+                    <div class="risk-param">
+                        <span class="param-label">Stop Loss (ATR)</span>
+                        <span class="param-value" id="param-stop-loss">2.0x</span>
+                    </div>
+                    <div class="risk-param">
+                        <span class="param-label">Target R:R</span>
+                        <span class="param-value" id="param-target">1:2</span>
+                    </div>
+                    <div class="risk-param">
+                        <span class="param-label">Volatile Stocks</span>
+                        <span class="param-value" id="param-volatile">❌</span>
+                    </div>
+                    <div class="risk-param">
+                        <span class="param-label">Loss Pause</span>
+                        <span class="param-value" id="param-pause">60 min</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="risk-presets">
+                <span style="font-size: 0.8rem; color: var(--text-secondary); margin-right: 0.5rem;">Quick Presets:</span>
+                <button type="button" class="preset-btn" onclick="setRiskPreset(10)">🛡️ Safe</button>
+                <button type="button" class="preset-btn" onclick="setRiskPreset(35)">📊 Conservative</button>
+                <button type="button" class="preset-btn active" onclick="setRiskPreset(50)">⚖️ Balanced</button>
+                <button type="button" class="preset-btn" onclick="setRiskPreset(75)">📈 Growth</button>
+                <button type="button" class="preset-btn" onclick="setRiskPreset(100)">🚀 Aggressive</button>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="btn-group">
+                <button type="button" class="btn btn-primary" onclick="saveRiskSettings()">
+                    💾 Save Risk Settings
+                </button>
+            </div>
+        </div>
+
         <div class="footer-note">
             🔒 Your API credentials are encrypted and stored securely.<br>
             Need help? <a href="https://docs.tradiqai.com/BROKER_SETUP.html" target="_blank">View Broker Setup Guide</a>
@@ -869,8 +1141,147 @@
             }
         }
 
+        // ===================== RISK METER FUNCTIONS =====================
+
+        // Calculate risk profile parameters based on risk tolerance
+        function calculateRiskParams(riskTolerance) {
+            const risk = Math.max(0, Math.min(100, riskTolerance));
+            
+            // Interpolation helper
+            const lerp = (min, max) => min + (max - min) * (risk / 100);
+            
+            // Calculate parameters
+            const maxPositions = Math.max(1, Math.min(5, Math.round(lerp(1, 5))));
+            const riskPerTrade = lerp(0.3, 2.5).toFixed(2);
+            const dailyLoss = lerp(1, 8).toFixed(1);
+            const maxExposure = lerp(30, 90).toFixed(0);
+            const stopLoss = lerp(3, 1.5).toFixed(1);
+            const takeProfit = lerp(1.5, 3).toFixed(1);
+            const allowVolatile = risk > 60;
+            const pauseMinutes = Math.round(lerp(90, 30) / 15) * 15;
+            
+            // Risk label
+            let label = 'Balanced';
+            if (risk <= 10) label = 'Ultra Safe';
+            else if (risk <= 25) label = 'Very Conservative';
+            else if (risk <= 40) label = 'Conservative';
+            else if (risk <= 60) label = 'Balanced';
+            else if (risk <= 75) label = 'Growth';
+            else if (risk <= 90) label = 'Aggressive';
+            else label = 'Very Aggressive';
+            
+            return {
+                maxPositions,
+                riskPerTrade,
+                dailyLoss,
+                maxExposure,
+                stopLoss,
+                takeProfit,
+                allowVolatile,
+                pauseMinutes,
+                label
+            };
+        }
+
+        // Update risk meter display
+        function updateRiskDisplay(riskValue) {
+            const params = calculateRiskParams(riskValue);
+            
+            // Update percentage and label
+            document.getElementById('risk-percentage').textContent = `${riskValue}%`;
+            document.getElementById('risk-label-current').textContent = params.label;
+            
+            // Update track fill
+            document.getElementById('risk-track-fill').style.width = `${riskValue}%`;
+            
+            // Update parameters display
+            document.getElementById('param-positions').textContent = params.maxPositions;
+            document.getElementById('param-risk-trade').textContent = `${params.riskPerTrade}%`;
+            document.getElementById('param-daily-loss').textContent = `${params.dailyLoss}%`;
+            document.getElementById('param-exposure').textContent = `${params.maxExposure}%`;
+            document.getElementById('param-stop-loss').textContent = `${params.stopLoss}x`;
+            document.getElementById('param-target').textContent = `1:${params.takeProfit}`;
+            document.getElementById('param-volatile').textContent = params.allowVolatile ? '✅' : '❌';
+            document.getElementById('param-pause').textContent = `${params.pauseMinutes} min`;
+            
+            // Update preset buttons
+            document.querySelectorAll('.preset-btn').forEach(btn => btn.classList.remove('active'));
+            
+            // Find matching preset
+            const presets = [10, 35, 50, 75, 100];
+            const closest = presets.reduce((prev, curr) => 
+                Math.abs(curr - riskValue) < Math.abs(prev - riskValue) ? curr : prev
+            );
+            const presetButtons = document.querySelectorAll('.preset-btn');
+            presetButtons.forEach(btn => {
+                if (parseInt(btn.getAttribute('onclick').match(/\d+/)[0]) === closest) {
+                    btn.classList.add('active');
+                }
+            });
+        }
+
+        // Set risk from preset
+        function setRiskPreset(value) {
+            document.getElementById('risk-slider').value = value;
+            updateRiskDisplay(value);
+        }
+
+        // Save risk settings
+        async function saveRiskSettings() {
+            const riskValue = parseInt(document.getElementById('risk-slider').value);
+            
+            showStatus('info', 'Saving risk settings...');
+            
+            try {
+                const response = await fetch('/api/risk/settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+                    },
+                    body: JSON.stringify({ risk_tolerance: riskValue })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    showStatus('success', `Risk settings saved! Profile: ${result.risk_label || 'Balanced'}`);
+                } else {
+                    const error = await response.json();
+                    showStatus('error', error.detail || 'Failed to save risk settings');
+                }
+            } catch (err) {
+                showStatus('error', 'Error saving risk settings: ' + err.message);
+            }
+        }
+
+        // Load risk settings
+        async function loadRiskSettings() {
+            try {
+                const response = await fetch('/api/risk/settings', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const riskValue = data.risk_tolerance || 50;
+                    document.getElementById('risk-slider').value = riskValue;
+                    updateRiskDisplay(riskValue);
+                }
+            } catch (err) {
+                console.log('Using default risk settings');
+                updateRiskDisplay(50);
+            }
+        }
+
+        // Risk slider event listener
+        document.getElementById('risk-slider')?.addEventListener('input', function(e) {
+            updateRiskDisplay(parseInt(e.target.value));
+        });
+
         // Initialize
-        document.addEventListener('DOMContentLoaded', loadConfig);
-    </script>
-</body>
-</html>
+        document.addEventListener('DOMContentLoaded', () => {
+            loadConfig();
+            loadRiskSettings();
+        });

@@ -302,6 +302,91 @@ async def test_broker_connection(config: BrokerConfigRequest):
         return {"connected": False, "message": str(e)}
 
 
+# ── Risk Settings API ───────────────────────────────────────────────────────
+
+# In-memory risk settings storage (replace with DB in production)
+_risk_settings = {"risk_tolerance": 50}
+
+
+class RiskSettingsRequest(BaseModel):
+    risk_tolerance: int
+
+
+@app.get("/api/risk/settings")
+async def get_risk_settings():
+    """Get current risk settings and calculated profile"""
+    try:
+        from risk_profile import calculate_risk_profile, get_risk_amount
+        
+        risk_tolerance = _risk_settings.get("risk_tolerance", 50)
+        profile = calculate_risk_profile(risk_tolerance)
+        amounts = get_risk_amount(risk_tolerance, 50000.0)  # Default capital
+        
+        return {
+            "risk_tolerance": risk_tolerance,
+            "risk_label": profile.risk_label,
+            "profile": profile.to_dict(),
+            "amounts": amounts
+        }
+    except ImportError:
+        # Return basic settings if risk_profile module not available
+        return {
+            "risk_tolerance": _risk_settings.get("risk_tolerance", 50),
+            "risk_label": "Balanced",
+            "profile": None,
+            "amounts": None
+        }
+
+
+@app.post("/api/risk/settings")
+async def save_risk_settings(settings: RiskSettingsRequest):
+    """Save risk tolerance settings"""
+    global _risk_settings
+    
+    # Validate range
+    risk_tolerance = max(0, min(100, settings.risk_tolerance))
+    _risk_settings["risk_tolerance"] = risk_tolerance
+    
+    try:
+        from risk_profile import calculate_risk_profile, get_risk_amount
+        
+        profile = calculate_risk_profile(risk_tolerance)
+        amounts = get_risk_amount(risk_tolerance, 50000.0)
+        
+        # Update config settings based on risk profile
+        from config import settings as app_config
+        app_config.max_open_trades = profile.max_open_positions
+        app_config.max_per_trade_risk = amounts["max_per_trade_risk"]
+        app_config.max_daily_loss = amounts["max_daily_loss"]
+        app_config.max_exposure_percent = profile.max_exposure_percent
+        app_config.max_capital_per_trade_percent = profile.max_capital_per_trade_percent
+        app_config.consecutive_loss_limit = profile.consecutive_loss_limit
+        app_config.consecutive_loss_pause_minutes = profile.consecutive_loss_pause_minutes
+        
+        logger.info(f"✅ Risk settings updated: {risk_tolerance}% ({profile.risk_label})")
+        
+        return {
+            "message": "Risk settings saved",
+            "risk_tolerance": risk_tolerance,
+            "risk_label": profile.risk_label,
+            "profile": profile.to_dict(),
+            "amounts": amounts
+        }
+    except ImportError as e:
+        logger.warning(f"risk_profile module not available: {e}")
+        return {
+            "message": "Risk tolerance saved (basic mode)",
+            "risk_tolerance": risk_tolerance,
+            "risk_label": "Balanced"
+        }
+    except Exception as e:
+        logger.error(f"Error saving risk settings: {e}")
+        return JSONResponse(
+            {"detail": str(e)},
+            status_code=500
+        )
+
+
 # ── Zerodha Kite Connect OAuth ───────────────────────────────────────
 @app.get("/api/kite/auth")
 async def kite_auth():

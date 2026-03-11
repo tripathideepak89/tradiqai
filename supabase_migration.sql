@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS public.users (
     paper_trading BOOLEAN DEFAULT true,
     broker_name VARCHAR(50) DEFAULT 'groww',
     broker_config JSONB,
+    risk_tolerance INTEGER DEFAULT 50 CHECK (risk_tolerance >= 0 AND risk_tolerance <= 100),
     max_daily_loss DECIMAL(15, 2) DEFAULT 1500.00,
     max_position_risk DECIMAL(15, 2) DEFAULT 400.00,
     max_open_positions INTEGER DEFAULT 2,
