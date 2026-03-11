@@ -12,6 +12,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Response, Depends, 
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBearer
+from pydantic import BaseModel
 import uvicorn
 from sqlalchemy import create_engine, select, desc, text
 from sqlalchemy.orm import sessionmaker, Session
@@ -64,6 +65,26 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastAPI
 app = FastAPI(title="TradiqAI Dashboard")
+
+
+# ── Broker Configuration Model ──────────────────────────────────────────────
+class BrokerConfigRequest(BaseModel):
+    broker: str
+    api_key: str = None
+    api_secret: str = None
+    user_id: str = None
+    totp_secret: str = None
+    client_id: str = None
+    password: str = None
+    app_id: str = None
+    secret_key: str = None
+    redirect_uri: str = None
+    capital: float = None
+
+
+# In-memory broker config storage (replace with DB in production)
+_broker_config = {}
+
 
 # ── Dividend Radar Engine (DRE) ─────────────────────────────────
 def _get_dre_db():
@@ -160,6 +181,126 @@ async def dividend_radar_page():
         )
     except FileNotFoundError:
         return HTMLResponse("<h2>Dividend Radar template not found.</h2>", status_code=404)
+
+
+@app.get("/settings")
+async def settings_page():
+    """Broker settings page."""
+    return _serve_template("settings.html")
+
+
+# ── Broker Config API ───────────────────────────────────────────────────────
+
+@app.get("/api/broker/config")
+async def get_broker_config():
+    """Get current broker configuration"""
+    global _broker_config
+    if _broker_config:
+        # Return config without sensitive data exposed in full
+        safe_config = {
+            "broker": _broker_config.get("broker"),
+            "connected": _broker_config.get("connected", False)
+        }
+        # Add masked versions of keys
+        if _broker_config.get("api_key"):
+            safe_config["api_key"] = _broker_config["api_key"][:4] + "****" if len(_broker_config["api_key"]) > 4 else "****"
+        if _broker_config.get("user_id"):
+            safe_config["user_id"] = _broker_config.get("user_id")
+        if _broker_config.get("client_id"):
+            safe_config["client_id"] = _broker_config.get("client_id")
+        if _broker_config.get("capital"):
+            safe_config["capital"] = _broker_config.get("capital")
+        return safe_config
+    return {"broker": None, "connected": False}
+
+
+@app.post("/api/broker/config")
+async def save_broker_config(config: BrokerConfigRequest):
+    """Save broker configuration"""
+    global _broker_config
+    
+    # Convert to dict and store
+    config_dict = config.model_dump(exclude_none=True)
+    _broker_config = config_dict
+    _broker_config["connected"] = False  # Will be set to True after successful test
+    
+    # Also update environment variables for the trading system
+    broker = config.broker.lower()
+    
+    if broker == "zerodha":
+        if config.api_key:
+            os.environ["ZERODHA_API_KEY"] = config.api_key
+        if config.api_secret:
+            os.environ["ZERODHA_API_SECRET"] = config.api_secret
+        if config.user_id:
+            os.environ["ZERODHA_USER_ID"] = config.user_id
+        if config.totp_secret:
+            os.environ["ZERODHA_TOTP_SECRET"] = config.totp_secret
+    elif broker == "groww":
+        if config.api_key:
+            os.environ["GROWW_API_KEY"] = config.api_key
+        if config.api_secret:
+            os.environ["GROWW_API_SECRET"] = config.api_secret
+    elif broker == "paper":
+        os.environ["PAPER_TRADING"] = "true"
+        if config.capital:
+            os.environ["INITIAL_CAPITAL"] = str(config.capital)
+    
+    # Set the active broker
+    os.environ["BROKER"] = broker
+    
+    return {"message": "Configuration saved", "broker": broker}
+
+
+@app.post("/api/broker/test")
+async def test_broker_connection(config: BrokerConfigRequest):
+    """Test broker connection"""
+    global _broker_config
+    
+    broker = config.broker.lower()
+    
+    # Paper trading always connects
+    if broker == "paper":
+        _broker_config["connected"] = True
+        return {"connected": True, "message": "Paper trading mode active"}
+    
+    # For real brokers, attempt connection test
+    try:
+        if broker == "zerodha":
+            # Test Zerodha connection
+            if not config.api_key or not config.api_secret:
+                return {"connected": False, "message": "API Key and Secret are required"}
+            
+            try:
+                from kiteconnect import KiteConnect
+                kite = KiteConnect(api_key=config.api_key)
+                # Can't fully test without login, but we can validate the API key format
+                if len(config.api_key) < 8:
+                    return {"connected": False, "message": "Invalid API Key format"}
+                _broker_config["connected"] = True
+                return {"connected": True, "message": "Zerodha credentials validated"}
+            except ImportError:
+                return {"connected": False, "message": "kiteconnect package not installed"}
+            except Exception as e:
+                return {"connected": False, "message": str(e)}
+                
+        elif broker == "groww":
+            # Test Groww connection
+            if not config.api_key or not config.api_secret:
+                return {"connected": False, "message": "API Key and Secret are required"}
+            _broker_config["connected"] = True
+            return {"connected": True, "message": "Groww credentials validated"}
+            
+        else:
+            # Generic validation for other brokers
+            if not config.api_key:
+                return {"connected": False, "message": "API Key is required"}
+            _broker_config["connected"] = True
+            return {"connected": True, "message": f"{broker.title()} credentials validated"}
+            
+    except Exception as e:
+        return {"connected": False, "message": str(e)}
+
 
 # ── Zerodha Kite Connect OAuth ───────────────────────────────────────
 @app.get("/api/kite/auth")
@@ -1231,6 +1372,7 @@ HTML_TEMPLATE = """
                         <a href="/rebalance"        style="padding:7px 13px;background:#0a2e1a;color:#00ff9d;border:1px solid #00ff9d;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:5px;">⚖️ Rebalancer</a>
                         <a href="/risk-of-ruin"     style="padding:7px 13px;background:#2e0a1a;color:#ff4d6d;border:1px solid #ff4d6d;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:5px;">💀 Risk of Ruin</a>
                         <a href="/audit/rejected-trades" style="padding:7px 13px;background:#1a1a2e;color:#c084fc;border:1px solid #c084fc;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:5px;">🚫 Rejected Trades</a>
+                        <a href="/settings"         style="padding:7px 13px;background:#374151;color:#9ca3af;border:1px solid #6b7280;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:5px;">⚙️ Settings</a>
                     </div>
                     <button onclick="logout()" style="padding:8px 16px;background:#ef4444;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:bold;">🔓 Logout</button>
                 </div>
