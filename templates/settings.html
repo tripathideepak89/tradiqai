@@ -301,6 +301,12 @@
             color: var(--danger);
         }
         
+        .alert-info {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            color: #3b82f6;
+        }
+        
         .alert-icon {
             font-size: 1.25rem;
         }
@@ -970,7 +976,7 @@
         // Show status message
         function showStatus(type, message) {
             const statusEl = document.getElementById('status-message');
-            const iconMap = { success: '✅', warning: '⚠️', error: '❌' };
+            const iconMap = { success: '✅', warning: '⚠️', error: '❌', info: 'ℹ️' };
             
             statusEl.className = `alert alert-${type} show`;
             statusEl.querySelector('.alert-icon').textContent = iconMap[type];
