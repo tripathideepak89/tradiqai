@@ -588,6 +588,7 @@
     <a href="/" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:var(--text1);border-radius:7px;padding:6px 14px;font-size:11px;font-family:var(--font-mono);text-decoration:none;transition:all 0.15s" onmouseover="this.style.color='var(--text0)'" onmouseout="this.style.color='var(--text1)'">← Dashboard</a>
     <div class="live-dot"><div class="dot"></div>LIVE</div>
     <div class="last-update" id="last-update">Fetching…</div>
+    <button class="refresh-btn" id="sync-btn" onclick="syncDREData()" style="background:rgba(0,255,157,0.1);border-color:rgba(0,255,157,0.3);color:var(--green);">⚡ Sync Data</button>
     <button class="refresh-btn" id="refresh-btn" onclick="loadData()">⟳ Refresh</button>
   </div>
 </header>
@@ -935,6 +936,38 @@ async function loadData() {
   }
 }
 
+/* Sync DRE Data - Fetches fresh dividend data from NSE/BSE/MoneyControl and scores them */
+async function syncDREData() {
+  const btn = document.getElementById('sync-btn');
+  btn.classList.add('loading');
+  btn.textContent = '⚡ Syncing…';
+  toast('Fetching dividend data from NSE, BSE & MoneyControl...', 'info');
+
+  try {
+    const res = await fetch(`${API_BASE}/api/dividends/refresh`, {
+      method: 'POST',
+      headers: _authHeaders()
+    });
+    if (res.status === 401) { window.location.replace('/'); return; }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    
+    const result = await res.json();
+    if (result.status === 'ok') {
+      toast(`✅ Synced ${result.records_scored || 0} stocks, ${result.entry_signals || 0} entry signals found!`, 'success');
+      // Reload data to show new results
+      await loadData();
+    } else {
+      throw new Error(result.message || 'Sync failed');
+    }
+  } catch(e) {
+    console.error('Sync error:', e);
+    toast('❌ Sync failed: ' + e.message, 'error');
+  } finally {
+    btn.classList.remove('loading');
+    btn.textContent = '⚡ Sync Data';
+  }
+}
+
 function updateStats() {
   document.getElementById('st-total').textContent   = ALL_DATA.length;
   document.getElementById('st-strong').textContent  = ALL_DATA.filter(d => d.dre_score >= 80).length;
@@ -973,7 +1006,16 @@ function renderTable() {
   const tbody = document.getElementById('table-body');
 
   if (!data.length) {
-    tbody.innerHTML = '<div class="empty-state">No stocks match the current filter.</div>';
+    if (ALL_DATA.length === 0) {
+      tbody.innerHTML = `<div class="empty-state">
+        <div style="font-size:48px;margin-bottom:16px;">📡</div>
+        <div style="font-size:14px;color:var(--text1);margin-bottom:8px;">No dividend data available</div>
+        <div style="margin-bottom:16px;">Click <strong style="color:var(--green)">⚡ Sync Data</strong> to fetch latest dividends from NSE, BSE & MoneyControl</div>
+        <button onclick="syncDREData()" style="background:rgba(0,255,157,0.15);border:1px solid var(--green);color:var(--green);padding:10px 20px;border-radius:8px;cursor:pointer;font-family:var(--font-mono);font-size:12px;">⚡ Sync Data Now</button>
+      </div>`;
+    } else {
+      tbody.innerHTML = '<div class="empty-state">No stocks match the current filter.</div>';
+    }
     return;
   }
 
