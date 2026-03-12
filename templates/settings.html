@@ -1234,28 +1234,41 @@
 
         // Save risk settings
         async function saveRiskSettings() {
-            const riskValue = parseInt(document.getElementById('risk-slider').value);
+            console.log('saveRiskSettings called');
+            const slider = document.getElementById('risk-slider');
+            if (!slider) {
+                console.error('risk-slider element not found');
+                showStatus('error', 'Risk slider not found');
+                return;
+            }
+            const riskValue = parseInt(slider.value);
+            console.log('Risk value:', riskValue);
             
             showStatus('info', 'Saving risk settings...');
             
             try {
+                console.log('Sending POST to /api/risk/settings');
                 const response = await fetch('/api/risk/settings', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({ risk_tolerance: riskValue })
                 });
                 
+                console.log('Response status:', response.status);
+                
                 if (response.ok) {
                     const result = await response.json();
+                    console.log('Success:', result);
                     showStatus('success', `Risk settings saved! Profile: ${result.risk_label || 'Balanced'}`);
                 } else {
                     const error = await response.json();
+                    console.log('Error response:', error);
                     showStatus('error', error.detail || 'Failed to save risk settings');
                 }
             } catch (err) {
+                console.error('Fetch error:', err);
                 showStatus('error', 'Error saving risk settings: ' + err.message);
             }
         }
