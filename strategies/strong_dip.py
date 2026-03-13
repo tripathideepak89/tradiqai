@@ -341,11 +341,11 @@ class SDOEScoringEngine:
         signal = SDOESignal(symbol=symbol, analyzed_at=datetime.now())
         
         try:
-            # 1. Fetch data if not provided
-            if historical_data is None and self.broker:
+            # 1. Fetch data if not provided (broker first, yfinance fallback)
+            if historical_data is None:
                 historical_data = await self._fetch_historical_data(symbol)
-            
-            if quote is None and self.broker:
+
+            if quote is None:
                 quote = await self._fetch_quote(symbol)
             
             if not historical_data or len(historical_data) < 60:

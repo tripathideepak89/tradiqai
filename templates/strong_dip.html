@@ -428,7 +428,7 @@
       return false;
     }
     try {
-      const res = await fetch('/auth/me', {
+      const res = await fetch('/api/auth/me', {
         headers: { 'Authorization': `Bearer ${authToken}` }
       });
       if (res.ok) {
