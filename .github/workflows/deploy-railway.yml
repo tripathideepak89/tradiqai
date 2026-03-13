@@ -28,13 +28,24 @@ jobs:
           pip install -r requirements_supabase.txt
       
       - name: 🧪 Run Tests
+        env:
+          DATABASE_URL: "sqlite:///:memory:"
+          SUPABASE_URL: "https://fake.supabase.co"
+          SUPABASE_ANON_KEY: "fake-anon-key"
+          SUPABASE_SERVICE_KEY: "fake-service-key"
+          ENV: "test"
+          REDIS_URL: "redis://localhost:6379/15"
         run: |
-          if [ -f pytest.ini ] || [ -d tests ]; then
-            pip install pytest pytest-asyncio
-            pytest tests/ -v || echo "⚠️ Tests failed but continuing deployment"
-          else
-            echo "ℹ️ No tests found, skipping test step"
-          fi
+          pip install pytest pytest-asyncio pytest-cov
+          # Run unit + integration tests (skip slow Monte Carlo in CI)
+          pytest tests/ -v \
+            --tb=short \
+            -m "not slow" \
+            --cov=. \
+            --cov-omit=".venv/*,tests/*,migrations/*" \
+            --cov-report=term-missing:skip-covered \
+            -q
+        continue-on-error: false
       
       - name: 🚂 Deploy to Railway
         uses: bervProject/railway-deploy@main

@@ -219,9 +219,52 @@ The system sends Telegram alerts for:
 ## 🔧 Development
 
 ### Run Tests
+
+The test suite uses `pytest` with an in-memory SQLite database — no real broker,
+Supabase, or Redis connection required.
+
 ```bash
+# All tests (unit + integration, skip slow Monte Carlo)
+pytest tests/ -m "not slow"
+
+# Smoke tests only (fastest — ~10 seconds)
+pytest tests/ -m smoke
+
+# Unit tests only (no HTTP layer)
+pytest tests/ -m unit
+
+# Full suite including slow Monte Carlo simulations
 pytest tests/
+
+# With coverage report
+pytest tests/ -m "not slow" --cov=. --cov-omit=".venv/*,tests/*" --cov-report=term-missing:skip-covered
+
+# Single test file
+pytest tests/test_api_health.py -v
 ```
+
+#### Test structure
+
+| File | Coverage area |
+|---|---|
+| `tests/conftest.py` | Shared fixtures: SQLite DB, MockBroker, TestClient, fake auth |
+| `tests/test_api_health.py` | App boot, router registration, environment validation |
+| `tests/test_api_portfolio.py` | Portfolio risk, compounding plan, rebalance, risk-of-ruin |
+| `tests/test_api_audit.py` | Rejected trades audit API + service layer |
+| `tests/test_api_sdoe_endpoints.py` | SDOE strong-dip scanner API (mocked scanner) |
+| `tests/test_e2e_flows.py` | Capital manager flows, MC simulation, error handling |
+| `tests/test_capital_manager.py` | CME unit tests |
+| `tests/test_portfolio_features.py` | Portfolio service unit tests |
+| `tests/test_rejected_trades.py` | Rejected trades service unit tests |
+| `tests/test_sdoe.py` | SDOE strategy scoring unit tests |
+
+#### Test markers
+
+- `unit` — Pure unit tests, no I/O
+- `integration` — FastAPI TestClient with SQLite DB
+- `e2e` — Full service-layer flows
+- `smoke` — Quick sanity checks (subset of integration)
+- `slow` — Monte Carlo or long-running simulations (skipped in CI)
 
 ### Code Quality
 ```bash
