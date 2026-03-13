@@ -782,6 +782,30 @@
     await checkAuth();
     await fetchOpportunities();
     await fetchRejected();
+
+    // Auto-trigger scan if cache is empty (first visit or expired)
+    const noData = allData.strong_buy.length === 0 && allData.watchlist.length === 0
+      && allData.monitor.length === 0 && allData.rejected.length === 0;
+    if (noData) {
+      // Show a non-blocking banner while scan runs in the background
+      const grid = document.getElementById('cardsGrid');
+      grid.innerHTML = `
+        <div class="center-msg" style="grid-column:1/-1">
+          <p>🔍 Running initial market scan using yfinance data…</p>
+          <p style="font-size:13px;margin-top:8px;color:var(--gray)">This takes 2–5 minutes on first load. Opportunities will appear when ready.</p>
+          <div style="margin-top:16px;border:2px solid var(--purple-dim);border-top-color:var(--purple);border-radius:50%;width:32px;height:32px;animation:spin 0.8s linear infinite;margin:16px auto 0"></div>
+        </div>`;
+      try {
+        const res = await fetch('/api/strategies/strong-dip/scan?force_refresh=true', { method: 'POST' });
+        if (res.ok) {
+          await fetchOpportunities();
+          await fetchRejected();
+        }
+      } catch (e) {
+        console.warn('Auto-scan failed:', e);
+        renderCards(); // Show "no opportunities" message
+      }
+    }
   });
 </script>
 
