@@ -189,7 +189,32 @@ class TradingSystem:
             logger.info("   → INTELLIGENCE: News clustering enabled")
             logger.info("   → INTELLIGENCE: Adaptive position sizing ready")
             
-            # 8. Send startup alert
+            # 9. Initialize SDOE (Strong Dip Opportunity Engine)
+            try:
+                if getattr(settings, 'sdoe_enabled', True):
+                    from services.sdoe_scanner import get_sdoe_scanner
+                    from strategies.strong_dip import SDOEStrategy
+                    
+                    self.sdoe_scanner = get_sdoe_scanner(
+                        broker=self.broker,
+                        db_session=self.db
+                    )
+                    self.sdoe_strategy = SDOEStrategy(broker=self.broker)
+                    self.strategies.append(self.sdoe_strategy)
+                    
+                    logger.info("[OK] [SDOE] Strong Dip Opportunity Engine initialized")
+                    logger.info("   → Looking for quality stocks on temporary decline")
+                    logger.info("   → Target: Short-to-medium term recovery opportunities")
+                else:
+                    self.sdoe_scanner = None
+                    self.sdoe_strategy = None
+                    logger.info("[INFO] SDOE disabled via config")
+            except Exception as _sdoe_err:
+                logger.warning(f"⚠️ SDOE not loaded: {_sdoe_err}")
+                self.sdoe_scanner = None
+                self.sdoe_strategy = None
+            
+            # 10. Send startup alert
             await self.monitoring.send_alert(
                 f"[STARTED] AutoTrade AI System Started\n\n"
                 f"Capital: Rs{self.risk_engine.available_capital:,.2f}\n"
@@ -234,7 +259,8 @@ class TradingSystem:
                 asyncio.create_task(self.position_monitor()),
                 asyncio.create_task(self.risk_monitor()),
                 asyncio.create_task(self.monitoring.start_monitoring()),
-                asyncio.create_task(self.news_processing_loop())  # NEW: News processing
+                asyncio.create_task(self.news_processing_loop()),  # News processing
+                asyncio.create_task(self.sdoe_scan_loop()),        # SDOE scanning
             ]
 
             # Start news ingestion (separate task)
@@ -1147,6 +1173,147 @@ class TradingSystem:
                 await asyncio.sleep(10)
         
         logger.info("⏹️ News processing loop stopped")
+    
+    async def sdoe_scan_loop(self) -> None:
+        """
+        Strong Dip Opportunity Engine scan loop
+        Scans for quality stocks on temporary decline with rebound potential
+        """
+        if not getattr(settings, 'sdoe_enabled', True):
+            logger.info("[SDOE] Disabled via config")
+            return
+        
+        if not hasattr(self, 'sdoe_scanner') or self.sdoe_scanner is None:
+            logger.warning("[SDOE] Scanner not initialized - skipping loop")
+            return
+        
+        logger.info("📉 SDOE scan loop started")
+        
+        # Wait for market to open on first run
+        from time_filter import TimeFilter
+        
+        while self.is_running:
+            try:
+                # Only scan during market hours or just before open
+                if not self.monitoring.is_market_open():
+                    # Allow pre-market scan at 9:00 AM
+                    current_time = now_ist().time()
+                    from datetime import time
+                    if not (time(8, 45) <= current_time <= time(9, 15)):
+                        await asyncio.sleep(60)
+                        continue
+                
+                # Run scan (uses cache if fresh)
+                scan_status = self.sdoe_scanner.get_scan_status()
+                
+                # Only run fresh scan if cache is stale or first run
+                if not scan_status['is_cache_fresh']:
+                    logger.info("[SDOE] Running universe scan...")
+                    
+                    try:
+                        result = await self.sdoe_scanner.scan_universe()
+                        
+                        logger.info(
+                            f"[SDOE] Scan complete: "
+                            f"{result.strong_buy_count} strong buy, "
+                            f"{result.watchlist_count} watchlist, "
+                            f"{result.monitor_count} monitor"
+                        )
+                        
+                        # Alert on strong buy opportunities
+                        if result.strong_buy_count > 0:
+                            strong_buy = self.sdoe_scanner.get_strong_buy()
+                            symbols = [s.get('symbol', '?') for s in strong_buy[:5]]
+                            
+                            await self.monitoring.send_alert(
+                                f"📉 SDOE STRONG BUY OPPORTUNITIES\n\n"
+                                f"Found {result.strong_buy_count} strong buy candidates:\n"
+                                f"{', '.join(symbols)}\n\n"
+                                f"View at /strong-dip for details",
+                                severity="INFO"
+                            )
+                            
+                            # Process strong buy candidates through signal flow
+                            can_trade, reason = TimeFilter.can_enter_new_trade()
+                            if can_trade and getattr(settings, 'sdoe_auto_scan_enabled', True):
+                                await self._process_sdoe_signals(strong_buy[:5])
+                    
+                    except Exception as scan_err:
+                        logger.error(f"[SDOE] Scan failed: {scan_err}")
+                
+                # Wait before next check (cache TTL based)
+                cache_ttl = getattr(settings, 'sdoe_cache_ttl_minutes', 60)
+                await asyncio.sleep(cache_ttl * 60)
+                
+            except Exception as e:
+                logger.error(f"[SDOE] Scan loop error: {e}")
+                await asyncio.sleep(300)  # Wait 5 min on error
+        
+        logger.info("⏹️ SDOE scan loop stopped")
+    
+    async def _process_sdoe_signals(self, signals: list) -> None:
+        """Process SDOE strong buy signals through the order flow"""
+        try:
+            from strategies.base import Signal
+            
+            for signal_data in signals:
+                try:
+                    symbol = signal_data.get('symbol')
+                    trade_params = signal_data.get('trade_params', {})
+                    
+                    if not symbol or not trade_params:
+                        continue
+                    
+                    entry_zone = trade_params.get('entry_zone', [0, 0])
+                    stop_loss = trade_params.get('stop_loss', 0)
+                    target = trade_params.get('target_1', 0)
+                    score = signal_data.get('total_score', 0)
+                    
+                    if not all([entry_zone[1], stop_loss, target]):
+                        continue
+                    
+                    # Create signal
+                    signal = Signal(
+                        symbol=symbol,
+                        action="BUY",
+                        entry_price=entry_zone[1],
+                        stop_loss=stop_loss,
+                        target=target,
+                        quantity=0,  # Calculated by order manager
+                        confidence=score / 100.0,
+                        reason=f"SDOE Score={score}/100: {', '.join(signal_data.get('selection_reasons', [])[:2])}",
+                        timestamp=now_ist(),
+                        product="CNC",  # Delivery for swing trades
+                    )
+                    
+                    logger.info(f"[SDOE] Processing signal: {symbol} (Score: {score})")
+                    
+                    # Execute through order manager
+                    if hasattr(self, 'sdoe_strategy') and self.sdoe_strategy:
+                        trade = await self.order_manager.execute_signal(
+                            signal,
+                            strategy_name="SDOE"
+                        )
+                        
+                        if trade:
+                            logger.info(f"[SDOE] Trade executed: {trade.symbol} x {trade.quantity}")
+                            
+                            await self.monitoring.send_alert(
+                                f"📉 SDOE TRADE EXECUTED\n\n"
+                                f"Symbol: {symbol}\n"
+                                f"Score: {score}/100\n"
+                                f"Entry: Rs{trade.entry_price:,.2f}\n"
+                                f"Stop: Rs{trade.stop_price:,.2f}\n"
+                                f"Target: Rs{trade.target_price:,.2f}\n"
+                                f"Qty: {trade.quantity} shares",
+                                severity="INFO"
+                            )
+                
+                except Exception as sig_err:
+                    logger.error(f"[SDOE] Signal processing failed for {signal_data.get('symbol')}: {sig_err}")
+        
+        except Exception as e:
+            logger.error(f"[SDOE] Signal batch processing error: {e}")
     
     async def shutdown(self) -> None:
         """Shutdown the system gracefully"""

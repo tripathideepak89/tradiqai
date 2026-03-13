@@ -99,6 +99,26 @@ class Settings(BaseSettings):
     # filter correctly.  Leave empty to tag with "system".
     trading_account_user_id: Optional[str] = None
 
+    # ── Strong Dip Opportunity Engine (SDOE) ─────────────────────────────────
+    # Enable SDOE strategy alongside or instead of existing strategies
+    sdoe_enabled: bool = True
+    # Minimum score for SDOE signals to be considered actionable
+    sdoe_min_score: int = 65
+    # Maximum number of SDOE signals to generate per day
+    sdoe_max_signals_per_day: int = 5
+    # Decline thresholds (from 60-day high)
+    sdoe_decline_min_pct: float = 5.0   # Min decline to be considered
+    sdoe_decline_max_pct: float = 35.0  # Max decline (avoid falling knives)
+    # Quality thresholds
+    sdoe_min_market_cap_cr: float = 5000.0  # Min market cap in crores
+    sdoe_min_avg_volume_cr: float = 10.0    # Min avg traded value in crores
+    # Position sizing in bearish market (multiplier)
+    sdoe_bearish_size_multiplier: float = 0.5
+    # Auto-run SDOE scan at market open
+    sdoe_auto_scan_enabled: bool = True
+    # Scan cache TTL in minutes
+    sdoe_cache_ttl_minutes: int = 60
+
     class Config:
         env_file = ".env"
         case_sensitive = False

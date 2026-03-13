@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TradiqAI — Strong Dip Opportunities (SDOE)</title>
+<style>
+  :root {
+    --bg0: #060810; --bg1: #0d1117; --bg2: #161b22; --bg3: #1f2937;
+    --purple: #c084fc; --purple-dim: #7e22ce;
+    --red: #f87171; --green: #4ade80; --yellow: #fbbf24;
+    --blue: #60a5fa; --gray: #9ca3af; --orange: #fb923c;
+    --text: #e5e7eb; --border: #374151;
+    --radius: 8px; --font: "Inter", "Segoe UI", sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg0); color: var(--text); font-family: var(--font); font-size: 14px; }
+
+  /* ── Layout ── */
+  .topbar {
+    background: var(--bg1); border-bottom: 1px solid var(--border);
+    padding: 14px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .topbar h1 { font-size: 18px; font-weight: 700; color: var(--purple); display: flex; align-items: center; gap: 8px; }
+  .topbar .back { color: var(--gray); text-decoration: none; font-size: 13px; }
+  .topbar .back:hover { color: var(--text); }
+  .topbar .user-tag { margin-left: auto; color: var(--gray); font-size: 12px; }
+
+  main { max-width: 1400px; margin: 0 auto; padding: 20px 24px; }
+
+  /* ── Strategy Banner ── */
+  .strategy-banner {
+    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+    border: 1px solid #4338ca;
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 24px;
+  }
+  .strategy-banner h2 {
+    font-size: 20px; font-weight: 700; color: #c7d2fe; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .strategy-banner p {
+    color: #a5b4fc; font-size: 14px; line-height: 1.5; max-width: 800px;
+  }
+  .strategy-badge {
+    background: #4f46e5; color: #fff; font-size: 11px; padding: 4px 10px;
+    border-radius: 4px; font-weight: 600;
+  }
+
+  /* ── Stats Row ── */
+  .stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  .stat-card {
+    flex: 1; min-width: 140px; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 18px;
+  }
+  .stat-card .val { font-size: 28px; font-weight: 700; color: var(--purple); }
+  .stat-card .lbl { font-size: 12px; color: var(--gray); margin-top: 4px; }
+  .stat-card.strong-buy .val { color: var(--green); }
+  .stat-card.watchlist .val { color: var(--yellow); }
+  .stat-card.monitor .val { color: var(--blue); }
+
+  /* ── Tabs ── */
+  .tabs {
+    display: flex; gap: 8px; margin-bottom: 20px;
+    border-bottom: 1px solid var(--border); padding-bottom: 12px;
+  }
+  .tab {
+    padding: 10px 20px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--bg2); color: var(--gray); cursor: pointer;
+    font-size: 13px; font-weight: 600; transition: all 0.15s;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .tab:hover { border-color: var(--purple); color: var(--text); }
+  .tab.active { background: var(--purple-dim); border-color: var(--purple); color: #fff; }
+  .tab .count {
+    background: rgba(255,255,255,0.15); padding: 2px 8px; border-radius: 99px;
+    font-size: 11px;
+  }
+  .tab.active .count { background: rgba(255,255,255,0.25); }
+
+  /* ── Filters ── */
+  .filters {
+    display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;
+    background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px; margin-bottom: 20px;
+  }
+  .filter-group { display: flex; flex-direction: column; gap: 4px; min-width: 130px; }
+  .filter-group label { font-size: 11px; color: var(--gray); text-transform: uppercase; letter-spacing: .05em; }
+  .filter-group input, .filter-group select {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: 5px;
+    color: var(--text); padding: 8px 10px; font-size: 13px; outline: none;
+  }
+  .filter-group input:focus, .filter-group select:focus { border-color: var(--purple); }
+  
+  .btn {
+    padding: 9px 18px; border-radius: 5px; border: none; cursor: pointer;
+    font-size: 13px; font-weight: 600;
+  }
+  .btn-primary { background: var(--purple-dim); color: #fff; }
+  .btn-primary:hover { background: #6d28d9; }
+  .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--gray); }
+  .btn-ghost:hover { border-color: var(--purple); color: var(--purple); }
+  .btn-success { background: #166534; color: #fff; }
+  .btn-success:hover { background: #15803d; }
+
+  /* ── Cards Grid ── */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+  }
+
+  .signal-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    transition: border-color 0.15s, transform 0.15s;
+    cursor: pointer;
+  }
+  .signal-card:hover {
+    border-color: var(--purple);
+    transform: translateY(-2px);
+  }
+  .signal-card.strong-buy { border-left: 4px solid var(--green); }
+  .signal-card.watchlist { border-left: 4px solid var(--yellow); }
+  .signal-card.monitor { border-left: 4px solid var(--blue); }
+  .signal-card.rejected { border-left: 4px solid var(--red); }
+
+  .card-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 14px;
+  }
+  .card-symbol {
+    font-size: 18px; font-weight: 700; color: var(--text);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-score {
+    font-size: 24px; font-weight: 700; display: flex; flex-direction: column;
+    align-items: flex-end;
+  }
+  .card-score .score-val { line-height: 1; }
+  .card-score .score-label { font-size: 10px; color: var(--gray); font-weight: 400; }
+  .card-score.high { color: var(--green); }
+  .card-score.medium { color: var(--yellow); }
+  .card-score.low { color: var(--blue); }
+
+  .card-category {
+    font-size: 11px; padding: 3px 8px; border-radius: 4px; font-weight: 600;
+  }
+  .card-category.strong-buy { background: #052e16; color: #4ade80; }
+  .card-category.watchlist { background: #422006; color: #fbbf24; }
+  .card-category.monitor { background: #172554; color: #60a5fa; }
+  .card-category.rejected { background: #2d1b1b; color: #f87171; }
+
+  .card-metrics {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    margin-bottom: 14px;
+  }
+  .metric {
+    background: var(--bg3); padding: 8px 10px; border-radius: 5px;
+  }
+  .metric .val { font-size: 15px; font-weight: 600; color: var(--text); }
+  .metric .lbl { font-size: 10px; color: var(--gray); margin-top: 2px; }
+  .metric.decline .val { color: var(--red); }
+  .metric.recovery .val { color: var(--green); }
+
+  .card-reasons {
+    font-size: 12px; color: var(--gray); margin-bottom: 12px;
+    max-height: 60px; overflow: hidden;
+  }
+  .card-reasons ul { padding-left: 16px; margin: 0; }
+  .card-reasons li { margin-bottom: 3px; }
+
+  .card-trade {
+    display: flex; justify-content: space-between; align-items: center;
+    padding-top: 12px; border-top: 1px solid var(--border);
+  }
+  .trade-levels {
+    display: flex; gap: 16px;
+  }
+  .trade-level {
+    font-size: 11px;
+  }
+  .trade-level .lbl { color: var(--gray); }
+  .trade-level .val { font-weight: 600; color: var(--text); }
+  .trade-level.stop .val { color: var(--red); }
+  .trade-level.target .val { color: var(--green); }
+
+  .horizon-badge {
+    font-size: 10px; padding: 3px 8px; border-radius: 4px;
+    background: var(--bg3); color: var(--orange); font-weight: 600;
+  }
+
+  /* ── Detail Modal ── */
+  .modal-overlay {
+    display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.7); z-index: 1000;
+    justify-content: center; align-items: center; padding: 20px;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--bg1); border: 1px solid var(--border); border-radius: 12px;
+    max-width: 700px; width: 100%; max-height: 85vh; overflow-y: auto;
+  }
+  .modal-header {
+    padding: 20px 24px; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .modal-header h3 { font-size: 18px; font-weight: 700; color: var(--text); }
+  .modal-close {
+    background: none; border: none; color: var(--gray); font-size: 24px;
+    cursor: pointer; padding: 0 8px;
+  }
+  .modal-close:hover { color: var(--text); }
+  .modal-body { padding: 24px; }
+
+  .score-bars {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+    margin-bottom: 20px;
+  }
+  .score-bar-item {
+    background: var(--bg2); padding: 12px; border-radius: 6px;
+  }
+  .score-bar-item .bar-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 6px;
+  }
+  .score-bar-item .bar-label { font-size: 12px; color: var(--gray); }
+  .score-bar-item .bar-value { font-size: 14px; font-weight: 600; color: var(--purple); }
+  .bar-track {
+    height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%; border-radius: 3px; transition: width 0.3s;
+  }
+  .bar-fill.green { background: var(--green); }
+  .bar-fill.yellow { background: var(--yellow); }
+  .bar-fill.blue { background: var(--blue); }
+  .bar-fill.purple { background: var(--purple); }
+
+  .detail-section {
+    margin-bottom: 20px;
+  }
+  .detail-section h4 {
+    font-size: 13px; color: var(--purple); margin-bottom: 10px;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .detail-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+  }
+  .detail-item {
+    background: var(--bg2); padding: 10px; border-radius: 5px;
+  }
+  .detail-item .lbl { font-size: 10px; color: var(--gray); margin-bottom: 2px; }
+  .detail-item .val { font-size: 14px; font-weight: 600; }
+
+  .risk-list {
+    background: #2d1b1b; border: 1px solid #7f1d1d; border-radius: 6px;
+    padding: 12px 14px;
+  }
+  .risk-list h5 { font-size: 12px; color: #f87171; margin-bottom: 8px; }
+  .risk-list ul { padding-left: 18px; margin: 0; }
+  .risk-list li { font-size: 12px; color: #fca5a5; margin-bottom: 4px; }
+
+  /* ── Loading/Empty States ── */
+  .center-msg {
+    text-align: center; padding: 60px 20px; color: var(--gray); font-size: 16px;
+  }
+  .spinner {
+    display: inline-block; width: 28px; height: 28px;
+    border: 3px solid var(--border); border-top-color: var(--purple);
+    border-radius: 50%; animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .cards-grid { grid-template-columns: 1fr; }
+    .stats { flex-direction: column; }
+    .tabs { flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- Top Bar -->
+  <div class="topbar">
+    <a href="/" class="back">← Dashboard</a>
+    <h1>📉 Strong Dip Opportunities</h1>
+    <span class="user-tag" id="userTag">Loading...</span>
+  </div>
+
+  <main>
+    <!-- Strategy Banner -->
+    <div class="strategy-banner">
+      <h2>
+        <span class="strategy-badge">SDOE</span>
+        Strong Dip Opportunity Engine
+      </h2>
+      <p>
+        Finding <strong>quality stocks on temporary decline</strong> with strong rebound potential.
+        This is NOT blind dip-buying — it's identifying strong businesses at attractive prices
+        with evidence of stabilization and early recovery signals.
+      </p>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="stats" id="statsRow">
+      <div class="stat-card strong-buy">
+        <div class="val" id="strongBuyCount">--</div>
+        <div class="lbl">Strong Buy (80+)</div>
+      </div>
+      <div class="stat-card watchlist">
+        <div class="val" id="watchlistCount">--</div>
+        <div class="lbl">Watchlist (65-79)</div>
+      </div>
+      <div class="stat-card monitor">
+        <div class="val" id="monitorCount">--</div>
+        <div class="lbl">Monitor (50-64)</div>
+      </div>
+      <div class="stat-card">
+        <div class="val" id="lastScanTime">--</div>
+        <div class="lbl">Last Scan</div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-tab="strong-buy">
+        🟢 Strong Buy <span class="count" id="tabStrongBuy">0</span>
+      </button>
+      <button class="tab" data-tab="watchlist">
+        🟡 Watchlist <span class="count" id="tabWatchlist">0</span>
+      </button>
+      <button class="tab" data-tab="monitor">
+        🔵 Monitor <span class="count" id="tabMonitor">0</span>
+      </button>
+      <button class="tab" data-tab="rejected">
+        🔴 Rejected <span class="count" id="tabRejected">0</span>
+      </button>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters">
+      <div class="filter-group">
+        <label>Sector</label>
+        <select id="filterSector">
+          <option value="">All Sectors</option>
+          <option value="Banking">Banking</option>
+          <option value="IT">IT</option>
+          <option value="Pharma">Pharma</option>
+          <option value="Auto">Auto</option>
+          <option value="FMCG">FMCG</option>
+          <option value="Metals">Metals</option>
+          <option value="Energy">Energy</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Min Score</label>
+        <input type="number" id="filterMinScore" min="0" max="100" placeholder="50" />
+      </div>
+      <div class="filter-group">
+        <label>Min Decline %</label>
+        <input type="number" id="filterMinDecline" min="0" max="50" step="0.5" placeholder="5" />
+      </div>
+      <div class="filter-group">
+        <label>Holding Period</label>
+        <select id="filterHorizon">
+          <option value="">All Periods</option>
+          <option value="5-20 days">Short (5-20 days)</option>
+          <option value="20-45 days">Medium (20-45 days)</option>
+          <option value="45-90 days">Long (45-90 days)</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="applyFilters()">Apply</button>
+      <button class="btn btn-ghost" onclick="clearFilters()">Clear</button>
+      <button class="btn btn-success" onclick="triggerScan()" style="margin-left:auto;">🔄 Scan Now</button>
+    </div>
+
+    <!-- Cards Grid -->
+    <div class="cards-grid" id="cardsGrid">
+      <div class="center-msg">
+        <div class="spinner"></div>
+        <p style="margin-top:12px;">Loading opportunities...</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- Detail Modal -->
+  <div class="modal-overlay" id="detailModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modalTitle">Symbol Details</h3>
+        <button class="modal-close" onclick="closeModal()">×</button>
+      </div>
+      <div class="modal-body" id="modalBody">
+        <!-- Dynamic content -->
+      </div>
+    </div>
+  </div>
+
+<script>
+  // ══════════════════════════════════════════════════════════════════════════
+  //  STATE
+  // ══════════════════════════════════════════════════════════════════════════
+  let currentTab = 'strong-buy';
+  let allData = {
+    strong_buy: [],
+    watchlist: [],
+    monitor: [],
+    rejected: []
+  };
+  let authToken = null;
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  AUTH
+  // ══════════════════════════════════════════════════════════════════════════
+  function getToken() {
+    return localStorage.getItem('access_token');
+  }
+
+  async function checkAuth() {
+    authToken = getToken();
+    if (!authToken) {
+      document.getElementById('userTag').textContent = 'Not logged in';
+      return false;
+    }
+    try {
+      const res = await fetch('/auth/me', {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      if (res.ok) {
+        const user = await res.json();
+        document.getElementById('userTag').textContent = user.email || user.username;
+        return true;
+      }
+    } catch (e) {}
+    document.getElementById('userTag').textContent = 'Session expired';
+    return false;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  DATA FETCHING
+  // ══════════════════════════════════════════════════════════════════════════
+  async function fetchOpportunities() {
+    try {
+      const res = await fetch('/api/strategies/strong-dip/today');
+      if (!res.ok) throw new Error('Failed to fetch');
+      const data = await res.json();
+      
+      allData.strong_buy = data.strong_buy || [];
+      allData.watchlist = data.watchlist || [];
+      allData.monitor = data.monitor || [];
+      
+      updateStats(data);
+      updateTabs();
+      renderCards();
+      
+    } catch (e) {
+      console.error('Error fetching opportunities:', e);
+      showError('Failed to load opportunities. Please try again.');
+    }
+  }
+
+  async function fetchRejected() {
+    try {
+      const res = await fetch('/api/strategies/strong-dip/rejected?limit=100');
+      if (!res.ok) throw new Error('Failed to fetch');
+      const data = await res.json();
+      allData.rejected = data.candidates || [];
+      updateTabs();
+    } catch (e) {
+      console.error('Error fetching rejected:', e);
+    }
+  }
+
+  async function triggerScan() {
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = '⏳ Scanning...';
+    btn.disabled = true;
+    
+    try {
+      const res = await fetch('/api/strategies/strong-dip/scan?force_refresh=true', {
+        method: 'POST'
+      });
+      if (!res.ok) throw new Error('Scan failed');
+      
+      const result = await res.json();
+      console.log('Scan result:', result);
+      
+      // Refresh data
+      await fetchOpportunities();
+      await fetchRejected();
+      
+      btn.textContent = '✅ Done!';
+      setTimeout(() => { btn.textContent = originalText; }, 2000);
+      
+    } catch (e) {
+      console.error('Scan error:', e);
+      btn.textContent = '❌ Failed';
+      setTimeout(() => { btn.textContent = originalText; }, 2000);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  UI UPDATES
+  // ══════════════════════════════════════════════════════════════════════════
+  function updateStats(data) {
+    document.getElementById('strongBuyCount').textContent = allData.strong_buy.length;
+    document.getElementById('watchlistCount').textContent = allData.watchlist.length;
+    document.getElementById('monitorCount').textContent = allData.monitor.length;
+    
+    const scanStatus = data.scan_status;
+    if (scanStatus && scanStatus.cache_age_minutes !== null) {
+      const mins = Math.round(scanStatus.cache_age_minutes);
+      document.getElementById('lastScanTime').textContent = mins + 'm ago';
+    } else {
+      document.getElementById('lastScanTime').textContent = 'No scan';
+    }
+  }
+
+  function updateTabs() {
+    document.getElementById('tabStrongBuy').textContent = allData.strong_buy.length;
+    document.getElementById('tabWatchlist').textContent = allData.watchlist.length;
+    document.getElementById('tabMonitor').textContent = allData.monitor.length;
+    document.getElementById('tabRejected').textContent = allData.rejected.length;
+  }
+
+  function renderCards() {
+    const grid = document.getElementById('cardsGrid');
+    let cards = [];
+    
+    switch (currentTab) {
+      case 'strong-buy':
+        cards = allData.strong_buy;
+        break;
+      case 'watchlist':
+        cards = allData.watchlist;
+        break;
+      case 'monitor':
+        cards = allData.monitor;
+        break;
+      case 'rejected':
+        cards = allData.rejected;
+        break;
+    }
+    
+    // Apply filters
+    cards = applyClientFilters(cards);
+    
+    if (cards.length === 0) {
+      grid.innerHTML = `
+        <div class="center-msg" style="grid-column: 1/-1;">
+          <p>No ${currentTab.replace('-', ' ')} opportunities found.</p>
+          <p style="font-size:13px; margin-top:8px;">Try running a scan or adjusting filters.</p>
+        </div>
+      `;
+      return;
+    }
+    
+    grid.innerHTML = cards.map(card => renderCard(card)).join('');
+  }
+
+  function renderCard(signal) {
+    const category = (signal.category || 'Reject').toLowerCase().replace(' ', '-');
+    const score = signal.total_score || 0;
+    const scoreClass = score >= 80 ? 'high' : score >= 65 ? 'medium' : 'low';
+    
+    const decline = signal.decline_metrics || {};
+    const quality = signal.quality_metrics || {};
+    const trade = signal.trade_params || {};
+    
+    const declinePct = decline.decline_from_60d_pct || 0;
+    const rrRatio = trade.risk_reward_ratio || 0;
+    const horizon = signal.holding_horizon || 'Unknown';
+    
+    const reasons = signal.selection_reasons || signal.rejection_reasons || [];
+    const reasonsHtml = reasons.slice(0, 3).map(r => {
+      const text = typeof r === 'string' ? r : r.message;
+      return `<li>${text}</li>`;
+    }).join('');
+    
+    const stopLoss = trade.stop_loss || 0;
+    const target = trade.target_1 || 0;
+    const entry = Array.isArray(trade.entry_zone) ? trade.entry_zone[1] : 0;
+    
+    return `
+      <div class="signal-card ${category}" onclick="showDetail('${signal.symbol}')">
+        <div class="card-header">
+          <div>
+            <div class="card-symbol">
+              ${signal.symbol}
+              <span class="card-category ${category}">${signal.category || 'Reject'}</span>
+            </div>
+          </div>
+          <div class="card-score ${scoreClass}">
+            <span class="score-val">${score}</span>
+            <span class="score-label">/100</span>
+          </div>
+        </div>
+        
+        <div class="card-metrics">
+          <div class="metric decline">
+            <div class="val">-${declinePct.toFixed(1)}%</div>
+            <div class="lbl">From 60d High</div>
+          </div>
+          <div class="metric recovery">
+            <div class="val">${rrRatio.toFixed(1)}:1</div>
+            <div class="lbl">Risk/Reward</div>
+          </div>
+        </div>
+        
+        <div class="card-reasons">
+          <ul>${reasonsHtml || '<li>No details available</li>'}</ul>
+        </div>
+        
+        <div class="card-trade">
+          <div class="trade-levels">
+            <div class="trade-level">
+              <div class="lbl">Entry</div>
+              <div class="val">₹${entry.toFixed(0)}</div>
+            </div>
+            <div class="trade-level stop">
+              <div class="lbl">Stop</div>
+              <div class="val">₹${stopLoss.toFixed(0)}</div>
+            </div>
+            <div class="trade-level target">
+              <div class="lbl">Target</div>
+              <div class="val">₹${target.toFixed(0)}</div>
+            </div>
+          </div>
+          <span class="horizon-badge">${horizon}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  function applyClientFilters(cards) {
+    const sector = document.getElementById('filterSector').value;
+    const minScore = parseInt(document.getElementById('filterMinScore').value) || 0;
+    const minDecline = parseFloat(document.getElementById('filterMinDecline').value) || 0;
+    const horizon = document.getElementById('filterHorizon').value;
+    
+    return cards.filter(card => {
+      if (sector && (card.quality_metrics?.sector || '') !== sector) return false;
+      if (minScore && (card.total_score || 0) < minScore) return false;
+      if (minDecline && (card.decline_metrics?.decline_from_60d_pct || 0) < minDecline) return false;
+      if (horizon && card.holding_horizon !== horizon) return false;
+      return true;
+    });
+  }
+
+  function applyFilters() {
+    renderCards();
+  }
+
+  function clearFilters() {
+    document.getElementById('filterSector').value = '';
+    document.getElementById('filterMinScore').value = '';
+    document.getElementById('filterMinDecline').value = '';
+    document.getElementById('filterHorizon').value = '';
+    renderCards();
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  DETAIL MODAL
+  // ══════════════════════════════════════════════════════════════════════════
+  async function showDetail(symbol) {
+    document.getElementById('modalTitle').textContent = `${symbol} Analysis`;
+    document.getElementById('modalBody').innerHTML = '<div class="center-msg"><div class="spinner"></div></div>';
+    document.getElementById('detailModal').classList.add('show');
+    
+    try {
+      const res = await fetch(`/api/strategies/strong-dip/${symbol}/explain`);
+      if (!res.ok) throw new Error('Failed to fetch');
+      const data = await res.json();
+      
+      renderDetailModal(data);
+    } catch (e) {
+      document.getElementById('modalBody').innerHTML = `
+        <div class="center-msg">
+          <p style="color:var(--red)">Failed to load details: ${e.message}</p>
+        </div>
+      `;
+    }
+  }
+
+  function renderDetailModal(data) {
+    const scoreExpl = data.score_explanation || {};
+    
+    const barsHtml = Object.entries(scoreExpl).map(([key, info]) => {
+      const score = info.score || 0;
+      const max = info.max || 20;
+      const pct = (score / max) * 100;
+      const barClass = pct >= 70 ? 'green' : pct >= 40 ? 'yellow' : 'blue';
+      
+      return `
+        <div class="score-bar-item">
+          <div class="bar-header">
+            <span class="bar-label">${key.charAt(0).toUpperCase() + key.slice(1).replace('_', ' ')}</span>
+            <span class="bar-value">${score}/${max}</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill ${barClass}" style="width:${pct}%"></div>
+          </div>
+          <div style="font-size:10px;color:var(--gray);margin-top:4px;">${info.description || ''}</div>
+        </div>
+      `;
+    }).join('');
+    
+    const keyFactors = (data.key_factors || []).map(f => `<li>${f}</li>`).join('');
+    const risks = (data.risks || []).map(r => `<li>${r}</li>`).join('');
+    
+    document.getElementById('modalBody').innerHTML = `
+      <div class="detail-section">
+        <h4>Verdict</h4>
+        <p style="color:var(--text);line-height:1.6;">${data.verdict || 'No verdict available'}</p>
+      </div>
+      
+      <div class="detail-section">
+        <h4>Score Breakdown</h4>
+        <div class="score-bars">${barsHtml}</div>
+      </div>
+      
+      ${keyFactors ? `
+      <div class="detail-section">
+        <h4>Key Factors</h4>
+        <ul style="padding-left:18px;color:var(--green);">${keyFactors}</ul>
+      </div>
+      ` : ''}
+      
+      ${risks ? `
+      <div class="risk-list">
+        <h5>⚠️ Risk Factors</h5>
+        <ul>${risks}</ul>
+      </div>
+      ` : ''}
+    `;
+  }
+
+  function closeModal() {
+    document.getElementById('detailModal').classList.remove('show');
+  }
+
+  function showError(msg) {
+    document.getElementById('cardsGrid').innerHTML = `
+      <div class="center-msg" style="grid-column:1/-1;color:var(--red);">
+        <p>${msg}</p>
+      </div>
+    `;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  TAB HANDLING
+  // ══════════════════════════════════════════════════════════════════════════
+  document.getElementById('tabs').addEventListener('click', (e) => {
+    const tab = e.target.closest('.tab');
+    if (!tab) return;
+    
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    currentTab = tab.dataset.tab;
+    renderCards();
+  });
+
+  // Close modal on overlay click
+  document.getElementById('detailModal').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('detailModal')) {
+      closeModal();
+    }
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  INIT
+  // ══════════════════════════════════════════════════════════════════════════
+  document.addEventListener('DOMContentLoaded', async () => {
+    await checkAuth();
+    await fetchOpportunities();
+    await fetchRejected();
+  });
+</script>
+
+</body>
+</html>

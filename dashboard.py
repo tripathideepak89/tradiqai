@@ -123,6 +123,14 @@ try:
 except Exception as _audit_err:
     logger.warning(f"⚠️ Audit routes not loaded: {_audit_err}")
 
+# ── SDOE API (Strong Dip Opportunity Engine) ─────────────────────────────────
+try:
+    from api_sdoe import router as _sdoe_router
+    app.include_router(_sdoe_router)
+    logger.info("✅ SDOE API routes registered")
+except Exception as _sdoe_err:
+    logger.warning(f"⚠️ SDOE routes not loaded: {_sdoe_err}")
+
 
 # ── Portfolio Analytics HTML pages ──────────────────────────────────────────
 
@@ -167,6 +175,12 @@ async def risk_of_ruin_page():
 async def rejected_trades_page():
     """Audit: rejected trade signals (read-only, auth enforced client-side)."""
     return _serve_template("rejected_trades.html")
+
+
+@app.get("/strong-dip")
+async def strong_dip_page():
+    """SDOE: Strong Dip Opportunity Engine dashboard."""
+    return _serve_template("strong_dip.html")
 
 
 @app.get("/dividend-radar")
