@@ -46,17 +46,17 @@ logger = logging.getLogger(__name__)
 
 SDOE_CONFIG = {
     # ── Decline Filter Thresholds ──────────────────────────────────────────────
-    "decline_20d_min_pct": 5.0,      # Min decline from 20-day high
-    "decline_60d_min_pct": 8.0,      # Min decline from 60-day high
-    "decline_max_pct": 35.0,         # Max decline (avoid falling knives)
-    "decline_daily_max_pct": 10.0,   # Reject if single-day crash > 10%
+    "decline_20d_min_pct": 3.0,      # Min decline from 20-day high (lowered for more opportunities)
+    "decline_60d_min_pct": 5.0,      # Min decline from 60-day high
+    "decline_max_pct": 40.0,         # Max decline (avoid falling knives)
+    "decline_daily_max_pct": 12.0,   # Reject if single-day crash > 12%
     
     # ── Quality Thresholds ─────────────────────────────────────────────────────
-    "min_market_cap_cr": 5000,       # Min market cap in crores (₹50B)
-    "min_avg_volume_cr": 10,         # Min 20-day avg traded value in crores
-    "min_roe_pct": 12.0,             # Prefer ROE > 12%
-    "max_de_ratio": 2.0,             # Debt/Equity < 2
-    "min_6m_rs": -15.0,              # 6-month relative strength vs NIFTY (allow mild underperformance)
+    "min_market_cap_cr": 500,        # Min market cap in crores (₹5B) - allows mid-caps
+    "min_avg_volume_cr": 1,          # Min 20-day avg traded value in crores
+    "min_roe_pct": 8.0,              # Prefer ROE > 8%
+    "max_de_ratio": 2.5,             # Debt/Equity < 2.5
+    "min_6m_rs": -25.0,              # 6-month relative strength vs NIFTY (allow underperformance)
     
     # ── Stabilization Thresholds ───────────────────────────────────────────────
     "rsi_oversold": 30,              # RSI below this = oversold
@@ -459,6 +459,8 @@ class SDOEScoringEngine:
         Returns:
             Dict with keys: "strong_buy", "watchlist", "monitor", "rejected"
         """
+        import asyncio
+        
         results = {
             "strong_buy": [],
             "watchlist": [],
@@ -468,21 +470,37 @@ class SDOEScoringEngine:
         
         min_score = min_score or self.config["score_monitor"]
         
-        for symbol in symbols:
-            try:
-                signal = await self.analyze_stock(symbol)
+        # Process with rate limiting (avoid yfinance throttle)
+        semaphore = asyncio.Semaphore(3)  # Max 3 concurrent requests
+        
+        async def analyze_with_limit(symbol: str):
+            async with semaphore:
+                try:
+                    signal = await self.analyze_stock(symbol)
+                    return signal
+                except Exception as e:
+                    logger.warning(f"[SDOE] Failed to analyze {symbol}: {e}")
+                    return None
+                finally:
+                    # Small delay to avoid rate limiting
+                    await asyncio.sleep(0.5)
+        
+        # Run analysis with concurrency
+        tasks = [analyze_with_limit(symbol) for symbol in symbols]
+        signals = await asyncio.gather(*tasks)
+        
+        for signal in signals:
+            if signal is None:
+                continue
                 
-                if signal.category == SDOECategory.STRONG_BUY:
-                    results["strong_buy"].append(signal)
-                elif signal.category == SDOECategory.WATCHLIST:
-                    results["watchlist"].append(signal)
-                elif signal.category == SDOECategory.MONITOR:
-                    results["monitor"].append(signal)
-                else:
-                    results["rejected"].append(signal)
-                    
-            except Exception as e:
-                logger.warning(f"[SDOE] Failed to analyze {symbol}: {e}")
+            if signal.category == SDOECategory.STRONG_BUY:
+                results["strong_buy"].append(signal)
+            elif signal.category == SDOECategory.WATCHLIST:
+                results["watchlist"].append(signal)
+            elif signal.category == SDOECategory.MONITOR:
+                results["monitor"].append(signal)
+            else:
+                results["rejected"].append(signal)
         
         # Sort by score descending
         for key in ["strong_buy", "watchlist", "monitor"]:
@@ -1146,36 +1164,110 @@ class SDOEScoringEngine:
         return round(rsi, 2)
     
     async def _fetch_historical_data(self, symbol: str) -> Optional[List[Dict]]:
-        """Fetch historical data from broker"""
-        if not self.broker:
-            return None
+        """Fetch historical data from broker or yfinance fallback"""
+        # Try broker first
+        if self.broker:
+            try:
+                from datetime import datetime, timedelta
+                end_date = datetime.now()
+                start_date = end_date - timedelta(days=90)
+                
+                candles = await self.broker.get_historical_data(
+                    symbol=symbol,
+                    from_date=start_date,
+                    to_date=end_date,
+                    interval="day"
+                )
+                if candles:
+                    return candles
+            except Exception as e:
+                logger.warning(f"[SDOE] Broker fetch failed for {symbol}: {e}")
         
+        # Fallback to yfinance
         try:
+            import yfinance as yf
             from datetime import datetime, timedelta
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=90)
             
-            candles = await self.broker.get_historical_data(
-                symbol=symbol,
-                from_date=start_date,
-                to_date=end_date,
-                interval="day"
-            )
+            ticker = yf.Ticker(f"{symbol}.NS")
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=120)  # Get extra days
+            
+            df = ticker.history(start=start_date, end=end_date)
+            
+            if df.empty:
+                # Try without .NS suffix
+                ticker = yf.Ticker(symbol)
+                df = ticker.history(start=start_date, end=end_date)
+            
+            if df.empty:
+                logger.warning(f"[SDOE] No yfinance data for {symbol}")
+                return None
+            
+            # Convert to candle format
+            candles = []
+            for idx, row in df.iterrows():
+                candles.append({
+                    'date': idx.strftime('%Y-%m-%d'),
+                    'open': float(row['Open']),
+                    'high': float(row['High']),
+                    'low': float(row['Low']),
+                    'close': float(row['Close']),
+                    'volume': int(row['Volume']),
+                })
+            
+            logger.debug(f"[SDOE] Fetched {len(candles)} candles from yfinance for {symbol}")
             return candles
+            
+        except ImportError:
+            logger.warning("[SDOE] yfinance not available for historical data")
+            return None
         except Exception as e:
-            logger.warning(f"[SDOE] Failed to fetch historical data for {symbol}: {e}")
+            logger.warning(f"[SDOE] yfinance fetch failed for {symbol}: {e}")
             return None
     
     async def _fetch_quote(self, symbol: str) -> Optional[Dict]:
-        """Fetch current quote from broker"""
-        if not self.broker:
-            return None
+        """Fetch current quote from broker or yfinance fallback"""
+        # Try broker first
+        if self.broker:
+            try:
+                quote = await self.broker.get_quote(symbol)
+                if quote:
+                    return quote
+            except Exception as e:
+                logger.warning(f"[SDOE] Broker quote failed for {symbol}: {e}")
         
+        # Fallback to yfinance
         try:
-            quote = await self.broker.get_quote(symbol)
-            return quote
+            import yfinance as yf
+            
+            ticker = yf.Ticker(f"{symbol}.NS")
+            info = ticker.info or {}
+            
+            # Try without .NS if needed
+            if not info.get('regularMarketPrice'):
+                ticker = yf.Ticker(symbol)
+                info = ticker.info or {}
+            
+            ltp = info.get('regularMarketPrice') or info.get('currentPrice') or info.get('previousClose')
+            
+            if not ltp:
+                return None
+            
+            return {
+                'symbol': symbol,
+                'ltp': float(ltp),
+                'open': float(info.get('open', ltp)),
+                'high': float(info.get('dayHigh', ltp)),
+                'low': float(info.get('dayLow', ltp)),
+                'close': float(info.get('previousClose', ltp)),
+                'volume': int(info.get('volume', 0)),
+            }
+            
+        except ImportError:
+            logger.warning("[SDOE] yfinance not available for quote")
+            return None
         except Exception as e:
-            logger.warning(f"[SDOE] Failed to fetch quote for {symbol}: {e}")
+            logger.warning(f"[SDOE] yfinance quote failed for {symbol}: {e}")
             return None
     
     async def _fetch_fundamentals(self, symbol: str) -> Optional[Dict]:
