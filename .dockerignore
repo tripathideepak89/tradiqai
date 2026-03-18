@@ -92,7 +92,6 @@ render.yaml
 .nixpacks.toml
 Procfile
 runtime.txt
-start.sh
 .env.railway
 RAILWAY_DEPLOYMENT.md
 RENDER_DEPLOYMENT.md
