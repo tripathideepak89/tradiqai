@@ -77,9 +77,20 @@ def _parse_date(raw: str) -> Optional[str]:
     if m:
         return raw
 
+    # YYYYMMDD  (BSE exdate field, e.g. '20260318')
+    m = re.match(r"^(\d{4})(\d{2})(\d{2})$", raw)
+    if m:
+        return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+
     # DD-Mon-YYYY  e.g. 12-Mar-2026
     try:
         return datetime.strptime(raw, "%d-%b-%Y").strftime("%Y-%m-%d")
+    except ValueError:
+        pass
+
+    # DD Mon YYYY  (BSE new format, e.g. '18 Mar 2026')
+    try:
+        return datetime.strptime(raw, "%d %b %Y").strftime("%Y-%m-%d")
     except ValueError:
         pass
 
@@ -98,12 +109,17 @@ def _parse_dividend_amount(purpose: str) -> float:
     """
     if not purpose:
         return 0.0
-    # Rs / INR amount
-    m = re.search(r"(?:rs\.?|inr)\s*(\d+(?:\.\d+)?)", purpose, re.IGNORECASE)
+    # Rs / INR amount — allow optional "- " between Rs. and the number
+    # e.g. "Rs 6.50", "Rs. - 8.0000", "INR 3"
+    m = re.search(r"(?:rs\.?|inr)\s*[-–]?\s*(\d+(?:\.\d+)?)", purpose, re.IGNORECASE)
     if m:
         return float(m.group(1))
     # Plain number before "per share"
     m = re.search(r"(\d+(?:\.\d+)?)\s*per\s*share", purpose, re.IGNORECASE)
+    if m:
+        return float(m.group(1))
+    # Trailing number as last resort (e.g. "Dividend - 5.00")
+    m = re.search(r"[-–]\s*(\d+(?:\.\d+)?)\s*$", purpose)
     if m:
         return float(m.group(1))
     return 0.0
@@ -425,7 +441,7 @@ class BSEFetcher:
             "dividend_type":     _parse_dividend_type(purpose),
             "dividend_amount":   _parse_dividend_amount(purpose),
             "face_value":        None,
-            "ex_date":           _parse_date(r.get("Ex_date", r.get("EX_DATE", r.get("exDate", "")))),
+            "ex_date":           _parse_date(r.get("Ex_date", r.get("EX_DATE", r.get("exDate", r.get("exdate", ""))))),
             "record_date":       _parse_date(r.get("RD_Date", r.get("REC_DATE", r.get("recDate", "")))),
             "bc_start_date":     _parse_date(r.get("BCRD_FROM", r.get("BC_START_DT", ""))),
             "bc_end_date":       _parse_date(r.get("BCRD_TO",   r.get("BC_END_DT", ""))),
