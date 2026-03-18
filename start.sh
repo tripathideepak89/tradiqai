@@ -26,7 +26,7 @@ fi
 (
   while true; do
     echo "[TRADING BOT] Starting main.py..."
-    python3.11 main.py
+    python3 main.py
     EXIT_CODE=$?
     echo "[TRADING BOT] main.py exited (code $EXIT_CODE). Restarting in 20s..."
     sleep 20
@@ -40,7 +40,7 @@ sleep 3
 
 # ── Web dashboard (foreground — Railway healthcheck + process lifecycle) ──────
 echo "[START] Starting dashboard..."
-exec python3.11 -m uvicorn dashboard:app \
+exec python3 -m uvicorn dashboard:app \
     --host 0.0.0.0 \
     --port $PORT \
     --log-level info \
