@@ -24,6 +24,7 @@ fi
 
 # ── Trading bot (background, auto-restart on crash) ──────────────────────────
 (
+  set +e  # disable errexit in subshell so crashes don't kill the restart loop
   while true; do
     echo "[TRADING BOT] Starting main.py..."
     python3 main.py
