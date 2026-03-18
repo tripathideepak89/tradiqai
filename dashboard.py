@@ -487,7 +487,7 @@ async def kite_status():
 
 # Quote cache (symbol -> {data, timestamp})
 quote_cache = {}
-QUOTE_CACHE_TTL = 30  # seconds
+QUOTE_CACHE_TTL = 240  # seconds — match ~5 min dashboard refresh cycle
 
 # WebSocket connection manager
 class ConnectionManager:
@@ -2793,31 +2793,33 @@ async def get_dashboard_data(user_id: str) -> Dict:
         current_time = time.time()
         cache_hits = 0
         cache_misses = 0
-        
-        if broker:
-            # Fetch quotes concurrently in batches to speed up
+
+        # Skip live fetching outside market hours — serve stale cache or empty list
+        _market_open = is_market_open()
+
+        if broker and _market_open:
             async def fetch_quote_safe(symbol):
                 try:
-                    # Check cache first
+                    # Serve from cache if fresh
                     if symbol in quote_cache:
                         cache_entry = quote_cache[symbol]
                         if current_time - cache_entry['timestamp'] < QUOTE_CACHE_TTL:
                             return ('cached', cache_entry['data'])
-                    
+
                     # Cache miss - fetch fresh data
-                    quote = await asyncio.wait_for(broker.get_quote(symbol), timeout=3.0)
+                    quote = await asyncio.wait_for(broker.get_quote(symbol), timeout=5.0)
                     if quote:
                         ltp = quote.last_price
                         prev_close = quote.close
                         day_change = ltp - prev_close if prev_close > 0 else 0
                         day_change_percent = (day_change / prev_close * 100) if prev_close > 0 else 0
-                        
+
                         signal = "No Signal"
                         if day_change_percent >= 1.5:
                             signal = "BUY Signal"
                         elif day_change_percent <= -2.0:
                             signal = "Avoid"
-                        
+
                         quote_data = {
                             "symbol": symbol,
                             "ltp": ltp,
@@ -2825,26 +2827,36 @@ async def get_dashboard_data(user_id: str) -> Dict:
                             "day_change_percent": day_change_percent,
                             "signal": signal
                         }
-                        
-                        # Cache the data
+
+                        # Update cache
                         quote_cache[symbol] = {
                             'data': quote_data,
                             'timestamp': current_time
                         }
-                        
+
                         return ('fetched', quote_data)
                     return ('error', symbol, "No quote data")
                 except asyncio.TimeoutError:
+                    # Serve stale cache on timeout rather than error
+                    if symbol in quote_cache:
+                        return ('cached', quote_cache[symbol]['data'])
                     return ('timeout', symbol)
                 except Exception as e:
-                    return ('error', symbol, str(e))
-            
-            # Fetch all quotes concurrently (max 10 at a time to avoid overwhelming API)
-            batch_size = 10
+                    err_str = str(e)
+                    # On 429 rate limit, serve stale cache if available
+                    if '429' in err_str or 'rate limit' in err_str.lower():
+                        if symbol in quote_cache:
+                            return ('cached', quote_cache[symbol]['data'])
+                        logger.debug(f"Rate limited for {symbol}, no cache available")
+                        return ('skip', symbol)
+                    return ('error', symbol, err_str)
+
+            # Fetch quotes in small batches with delay between batches to avoid rate limiting
+            batch_size = 5
             for i in range(0, len(watchlist), batch_size):
                 batch = watchlist[i:i+batch_size]
                 results = await asyncio.gather(*[fetch_quote_safe(symbol) for symbol in batch], return_exceptions=True)
-                
+
                 for result in results:
                     if isinstance(result, tuple):
                         if result[0] == 'cached':
@@ -2863,7 +2875,18 @@ async def get_dashboard_data(user_id: str) -> Dict:
                                 "signal": "Timeout" if result[0] == 'timeout' else "Error"
                             }
                             monitored_stocks_data.append(error_data)
-        
+                        # 'skip' (rate limited, no cache) — omit from list silently
+
+                # Small delay between batches to self-throttle
+                if i + batch_size < len(watchlist):
+                    await asyncio.sleep(0.5)
+        else:
+            # Market closed or no broker — serve stale cache to avoid wasted API calls
+            for symbol in watchlist:
+                if symbol in quote_cache:
+                    cache_hits += 1
+                    monitored_stocks_data.append(quote_cache[symbol]['data'])
+
         print(f"     Quotes fetched in {time.time() - quotes_start:.3f}s (cache hits: {cache_hits}, misses: {cache_misses})")
         logger.debug(f"⏱️ Quotes fetched: {time.time() - quotes_start:.3f}s (cache hits: {cache_hits}, misses: {cache_misses})")
         
