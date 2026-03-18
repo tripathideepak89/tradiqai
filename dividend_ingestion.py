@@ -428,11 +428,15 @@ class BSEFetcher:
     @staticmethod
     def _normalise(r: dict) -> dict:
         # BSE field names changed in 2025/2026 — handle both old and new formats.
-        # New: scrip_code, long_name, Ex_date, Purpose, RD_Date, BCRD_FROM, BCRD_TO
+        # New: scrip_code, short_name, long_name, Ex_date, Purpose, RD_Date, BCRD_FROM, BCRD_TO
         # Old: SCRIP_CD,  SCRIP_NAME, EX_DATE, PURPOSE, REC_DATE, BC_START_DT, BC_END_DT
         purpose = r.get("Purpose", r.get("PURPOSE", r.get("purpose", "")))
+        # Use short_name (BSE trading symbol) as NSE-compatible ticker.
+        # short_name is typically identical to the NSE symbol (e.g. "ITC", "TCS", "BANCOINDIA").
+        short_name = r.get("short_name", "")
+        symbol = str(short_name).strip().upper() if short_name else None
         return {
-            "symbol":            None,  # BSE doesn't return NSE ticker natively
+            "symbol":            symbol,
             "bse_code":          str(r.get("scrip_code", r.get("SCRIP_CD", r.get("scripCd", "")))),
             "name":              r.get("long_name", r.get("SCRIP_NAME", r.get("scripName", ""))),
             "series":            None,

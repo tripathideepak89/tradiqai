@@ -418,7 +418,7 @@ def register_dre_routes(app, get_db, get_user=None):
                 s.score_financial, s.score_technical
             FROM   corporate_actions_dividends d
             LEFT JOIN dividend_scores s
-                ON s.symbol = d.symbol AND s.ex_date = d.ex_date
+                ON s.symbol = COALESCE(d.symbol, d.bse_code) AND s.ex_date = d.ex_date
             WHERE  d.ex_date >= CURRENT_DATE
               AND  d.ex_date <= CURRENT_DATE + INTERVAL '14 days'
             ORDER  BY COALESCE(s.dre_score, 0) DESC;
@@ -434,7 +434,7 @@ def register_dre_routes(app, get_db, get_user=None):
                 s.score_financial, s.score_technical
             FROM   corporate_actions_dividends d
             LEFT JOIN dividend_scores s
-                ON s.symbol = d.symbol AND s.ex_date = d.ex_date
+                ON s.symbol = COALESCE(d.symbol, d.bse_code) AND s.ex_date = d.ex_date
             WHERE  d.ex_date >= CURRENT_DATE - INTERVAL '7 days'
               AND  d.ex_date <  CURRENT_DATE
             ORDER  BY COALESCE(s.dre_score, 0) DESC
