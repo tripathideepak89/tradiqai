@@ -283,22 +283,81 @@ class NSEFetcher:
 
 
 # ─────────────────────────────────────────────
-#  SOURCE 2: BSE  (FALLBACK / ENRICHMENT)
+#  SOURCE 2: BSE  (PRIMARY — NSE blocked on Railway)
 # ─────────────────────────────────────────────
+#
+#  BSE API requires a browser session cookie from www.bseindia.com
+#  before api.bseindia.com responds with JSON (otherwise → 301 to
+#  members/showinterest.aspx).  Strategy: init session by visiting
+#  the homepage + corporate-actions page, then call the API with the
+#  shared session so cookies from .bseindia.com are forwarded.
 
-BSE_API_URL = "https://api.bseindia.com/BseIndiaAPI/api/DefaultData/w"
-BSE_HEADERS = {
-    "User-Agent": "Mozilla/5.0",
-    "Referer":    "https://www.bseindia.com",
-    "Origin":     "https://www.bseindia.com",
+BSE_HOME         = "https://www.bseindia.com"
+BSE_CA_PAGE      = "https://www.bseindia.com/corporates/corporates_act.html"
+BSE_API_URL      = "https://api.bseindia.com/BseIndiaAPI/api/DefaultData/w"
+
+BSE_BROWSE_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.0.0 Safari/537.36"
+    ),
+    "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection":      "keep-alive",
+}
+
+BSE_API_HEADERS = {
+    "Accept":       "application/json, text/plain, */*",
+    "Referer":      "https://www.bseindia.com/corporates/corporates_act.html",
+    "Origin":       "https://www.bseindia.com",
+    "X-Requested-With": "XMLHttpRequest",
 }
 
 
 class BSEFetcher:
     """
-    BSE has a relatively open JSON API — simpler than NSE.
-    CAType=4 → Dividend events.
+    BSE corporate actions — requires a live session cookie from
+    www.bseindia.com before api.bseindia.com will respond with JSON.
+    Mirrors the same session-init pattern used by NSEFetcher.
     """
+
+    def __init__(self):
+        self.session      = None
+        self.session_time = None
+        self.SESSION_TTL  = 1800  # seconds
+
+    def _init_session(self):
+        if (self.session_time and
+                (time.time() - self.session_time) < self.SESSION_TTL):
+            return  # reuse
+
+        logger.info("BSE: initialising new session…")
+        s = requests.Session()
+        s.headers.update(BSE_BROWSE_HEADERS)
+
+        try:
+            # Step 1 — hit BSE homepage to get base cookies
+            r = s.get(BSE_HOME, timeout=15)
+            r.raise_for_status()
+            time.sleep(1.0)
+
+            # Step 2 — hit corporate-actions page (populates session cookies)
+            r = s.get(BSE_CA_PAGE, timeout=15)
+            r.raise_for_status()
+            time.sleep(0.5)
+
+            # Switch to JSON/XHR headers for API calls
+            s.headers.update(BSE_API_HEADERS)
+
+            self.session      = s
+            self.session_time = time.time()
+            logger.info("BSE: session initialised successfully.")
+
+        except Exception as exc:
+            logger.error(f"BSE: session init failed — {exc}")
+            self.session = None
 
     def fetch(self, from_date: str, to_date: str) -> list[dict]:
         """
@@ -309,21 +368,30 @@ class BSEFetcher:
         Returns:
             List of normalised dicts.
         """
+        self._init_session()
+        if not self.session:
+            logger.warning("BSE: no session, skipping.")
+            return []
+
         params = {
-            "Grp":        "CA",
-            "CAType":     "4",       # 4 = Dividend
-            "scripcode":  "",        # empty = all
-            "strdate":    from_date,
-            "enddate":    to_date,
+            "Grp":          "CA",
+            "CAType":       "4",     # 4 = Dividend
+            "scripcode":    "",      # empty = all
+            "strdate":      from_date,
+            "enddate":      to_date,
             "ddlcategorys": "E",     # E = Equity
         }
         try:
-            resp = requests.get(
+            resp = self.session.get(
                 BSE_API_URL,
                 params=params,
-                headers=BSE_HEADERS,
-                timeout=20,
+                timeout=25,
             )
+            # Detect silent redirect to the auth wall
+            if "showinterest" in resp.url or resp.status_code in (301, 302):
+                logger.warning("BSE: API redirected to auth wall — session may have expired.")
+                self.session = None  # force re-init next call
+                return []
             resp.raise_for_status()
             data = resp.json()
 
@@ -335,6 +403,7 @@ class BSEFetcher:
 
         except Exception as exc:
             logger.error(f"BSE fetch error: {exc}")
+            self.session = None  # force re-init next call
             return []
 
     @staticmethod
@@ -696,7 +765,6 @@ class DividendIngestionService:
         self.conn        = db_conn
         self.window_days = window_days
         self.nse         = NSEFetcher()
-        self.nse_archive = NSEArchiveFetcher()
         self.bse         = BSEFetcher()
         self.mc          = MoneyControlFetcher()
 
@@ -735,15 +803,18 @@ class DividendIngestionService:
         today_str = today.strftime("%Y-%m-%d")
         end_str   = end.strftime("%Y-%m-%d")
 
-        # Primary: NSE live API (needs browser session; may fail on server IPs)
-        nse_data = self.nse.fetch(nse_from, nse_to)
-
-        # Secondary: NSE static archive CSV (server-IP safe fallback)
-        if not nse_data:
-            logger.info("NSE live API returned 0 records — trying NSE Archive CSV...")
-            nse_data = self.nse_archive.fetch(today_str, end_str)
-
+        # Primary: BSE — accessible from cloud/Railway via cookie-session init.
+        # NSE requires browser cookies AND blocks Railway IPs at the homepage level.
+        # NSE Archive CSV is dead (404 since 2026).
         bse_data = self.bse.fetch(bse_from, bse_to)
+
+        # Secondary: NSE live API — try as top-up if running locally
+        # (Railway IPs are blocked at https://www.nseindia.com/ — will fail fast).
+        nse_data = []
+        if not bse_data:
+            logger.info("BSE returned 0 — attempting NSE live API as fallback…")
+            nse_data = self.nse.fetch(nse_from, nse_to)
+
         mc_data  = self.mc.fetch()   # MC doesn't support date params; filter post-fetch
 
         # Filter MC to window

@@ -917,12 +917,19 @@ async function loadData() {
     const res = await fetch(`${API_BASE}/api/dividends/upcoming`, { headers: _authHeaders() });
     if (res.status === 401) { window.location.replace('/'); return; }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    ALL_DATA = await res.json();
+    const payload = await res.json();
+    // API returns {data:[...], data_as_of, count, notice?} or legacy plain array
+    ALL_DATA = Array.isArray(payload) ? payload : (payload.data || []);
     updateStats();
     renderTable();
-    document.getElementById('last-update').textContent =
-      'Updated: ' + new Date().toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit'});
-    toast('Data refreshed successfully', 'success');
+    const asOf = payload.data_as_of || 'live';
+    const timeStr = new Date().toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit'});
+    document.getElementById('last-update').textContent = 'Updated: ' + timeStr;
+    if (payload.notice) {
+      toast(payload.notice, asOf === 'unavailable' ? 'error' : 'info');
+    } else {
+      toast(asOf === 'recent_past' ? 'Showing recent past data — upcoming window is empty' : 'Data refreshed successfully', asOf === 'recent_past' ? 'info' : 'success');
+    }
   } catch(e) {
     console.warn('API unavailable:', e.message);
     ALL_DATA = [];

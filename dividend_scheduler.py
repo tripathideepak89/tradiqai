@@ -225,6 +225,14 @@ class DividendRadarScheduler:
             logger.error("DRE: Cannot run — no DB connection.")
             return []
 
+        # Refresh Kite access_token from DB — token expires every 24h so
+        # the startup-loaded singleton may be stale when the daily cron fires.
+        try:
+            from kite_client import load_token_from_db
+            load_token_from_db(conn)
+        except Exception as _kt:
+            logger.debug(f"DRE: Kite token refresh skipped: {_kt}")
+
         # ── Step 1 & 2: Ingest (upsert any new records) ─────────────
         ingestion_svc = DividendIngestionService(conn, window_days=14)
         ingestion_svc.ensure_table()
@@ -391,8 +399,15 @@ def register_dre_routes(app, get_db, get_user=None):
 
     @app.get("/api/dividends/upcoming")
     def get_upcoming_dividends(db=Depends(get_db), _=Depends(_auth)):
-        """Return upcoming dividends with DRE scores for the Radar UI."""
-        sql = """
+        """Return upcoming dividends with DRE scores for the Radar UI.
+
+        Primary window: today → today+14 days.
+        Fallback: if no upcoming records exist in DB, return the most recent
+        past records (up to 7 days old) so the page is never blank while
+        waiting for the next ingestion run.  The response includes a
+        `data_as_of` field so the UI can warn when data is stale.
+        """
+        upcoming_sql = """
             SELECT
                 d.symbol, d.name, d.exchange, d.dividend_amount, d.dividend_type,
                 d.ex_date, d.record_date, d.payment_date,
@@ -408,11 +423,57 @@ def register_dre_routes(app, get_db, get_user=None):
               AND  d.ex_date <= CURRENT_DATE + INTERVAL '14 days'
             ORDER  BY COALESCE(s.dre_score, 0) DESC;
         """
-        with db.cursor() as cur:
-            cur.execute(sql)
-            cols = [desc[0] for desc in cur.description]
-            rows = cur.fetchall()
-        return JSONResponse(_rows_to_json(cols, rows))
+        fallback_sql = """
+            SELECT
+                d.symbol, d.name, d.exchange, d.dividend_amount, d.dividend_type,
+                d.ex_date, d.record_date, d.payment_date,
+                s.dre_score, s.yield_pct, s.category, s.trend,
+                s.is_trap, s.entry_signal, s.days_to_ex,
+                s.entry_zone_low, s.entry_zone_high,
+                s.score_yield, s.score_consistency, s.score_growth,
+                s.score_financial, s.score_technical
+            FROM   corporate_actions_dividends d
+            LEFT JOIN dividend_scores s
+                ON s.symbol = d.symbol AND s.ex_date = d.ex_date
+            WHERE  d.ex_date >= CURRENT_DATE - INTERVAL '7 days'
+              AND  d.ex_date <  CURRENT_DATE
+            ORDER  BY COALESCE(s.dre_score, 0) DESC
+            LIMIT  50;
+        """
+        try:
+            with db.cursor() as cur:
+                cur.execute(upcoming_sql)
+                cols = [desc[0] for desc in cur.description]
+                rows = cur.fetchall()
+
+            if rows:
+                return JSONResponse({
+                    "data": _rows_to_json(cols, rows),
+                    "data_as_of": "live",
+                    "count": len(rows),
+                })
+
+            # Nothing upcoming — try recent past as fallback
+            with db.cursor() as cur:
+                cur.execute(fallback_sql)
+                cols = [desc[0] for desc in cur.description]
+                rows = cur.fetchall()
+
+            return JSONResponse({
+                "data": _rows_to_json(cols, rows),
+                "data_as_of": "recent_past",
+                "count": len(rows),
+                "notice": "No dividends in next 14 days — showing recent past data. Trigger /api/dividends/refresh to resync.",
+            })
+        except Exception as exc:
+            # Table doesn't exist yet (first boot before DRE ran)
+            logger.warning(f"DRE upcoming query failed: {exc}")
+            return JSONResponse({
+                "data": [],
+                "data_as_of": "unavailable",
+                "count": 0,
+                "notice": "Dividend data not yet available — DRE pipeline is initialising. Check back in a minute.",
+            })
 
     @app.get("/api/dividends/signals")
     def get_entry_signals(db=Depends(get_db), _=Depends(_auth)):

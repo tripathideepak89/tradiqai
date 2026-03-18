@@ -786,6 +786,21 @@ async def startup_event():
     except Exception as _e:
         logger.warning(f"⚠️ DRE scheduler not started: {_e}")
 
+    # Run DRE pipeline immediately on startup so dividend-radar page has data
+    # without waiting until 6:30 AM. Runs in a thread (blocking I/O, not async).
+    async def _dre_initial_run():
+        await asyncio.sleep(15)   # let DB init and Kite token load finish first
+        try:
+            import concurrent.futures
+            loop = asyncio.get_event_loop()
+            scheduler = DividendRadarScheduler()
+            await loop.run_in_executor(None, scheduler.run_once)
+            logger.info("✅ DRE startup pipeline run complete")
+        except Exception as _exc:
+            logger.warning(f"⚠️ DRE startup pipeline run failed: {_exc}")
+
+    asyncio.create_task(_dre_initial_run())
+
     # Load Kite access_token from Supabase (if previously stored via /api/kite/callback)
     try:
         from kite_client import load_token_from_db
