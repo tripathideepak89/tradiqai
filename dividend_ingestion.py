@@ -397,6 +397,9 @@ class BSEFetcher:
 
             # BSE returns {"Table": [...]}  or  [...]
             rows = data.get("Table", data) if isinstance(data, dict) else data
+            if rows and isinstance(rows, list) and rows:
+                logger.info(f"BSE: sample record keys = {list(rows[0].keys())}")
+                logger.info(f"BSE: sample record[0] = {rows[0]}")
             results = [self._normalise(r) for r in rows if isinstance(r, dict)]
             logger.info(f"BSE: fetched {len(results)} dividend records.")
             return results
@@ -408,24 +411,27 @@ class BSEFetcher:
 
     @staticmethod
     def _normalise(r: dict) -> dict:
-        purpose = r.get("PURPOSE", r.get("purpose", ""))
+        # BSE field names changed in 2025/2026 — handle both old and new formats.
+        # New: scrip_code, long_name, Ex_date, Purpose, RD_Date, BCRD_FROM, BCRD_TO
+        # Old: SCRIP_CD,  SCRIP_NAME, EX_DATE, PURPOSE, REC_DATE, BC_START_DT, BC_END_DT
+        purpose = r.get("Purpose", r.get("PURPOSE", r.get("purpose", "")))
         return {
             "symbol":            None,  # BSE doesn't return NSE ticker natively
-            "bse_code":          str(r.get("SCRIP_CD", r.get("scripCd", ""))),
-            "name":              r.get("SCRIP_NAME", r.get("scripName", "")),
+            "bse_code":          str(r.get("scrip_code", r.get("SCRIP_CD", r.get("scripCd", "")))),
+            "name":              r.get("long_name", r.get("SCRIP_NAME", r.get("scripName", ""))),
             "series":            None,
             "exchange":          "BSE",
             "purpose":           purpose,
             "dividend_type":     _parse_dividend_type(purpose),
             "dividend_amount":   _parse_dividend_amount(purpose),
             "face_value":        None,
-            "ex_date":           _parse_date(r.get("EX_DATE", r.get("exDate", ""))),
-            "record_date":       _parse_date(r.get("REC_DATE", r.get("recDate", ""))),
-            "bc_start_date":     _parse_date(r.get("BC_START_DT", "")),
-            "bc_end_date":       _parse_date(r.get("BC_END_DT", "")),
-            "nd_start_date":     _parse_date(r.get("ND_START_DT", "")),
-            "nd_end_date":       _parse_date(r.get("ND_END_DT", "")),
-            "payment_date":      _parse_date(r.get("PAYMENT_DATE", r.get("paymentDate", ""))),
+            "ex_date":           _parse_date(r.get("Ex_date", r.get("EX_DATE", r.get("exDate", "")))),
+            "record_date":       _parse_date(r.get("RD_Date", r.get("REC_DATE", r.get("recDate", "")))),
+            "bc_start_date":     _parse_date(r.get("BCRD_FROM", r.get("BC_START_DT", ""))),
+            "bc_end_date":       _parse_date(r.get("BCRD_TO",   r.get("BC_END_DT", ""))),
+            "nd_start_date":     _parse_date(r.get("ND_START_DATE", r.get("ND_START_DT", ""))),
+            "nd_end_date":       _parse_date(r.get("ND_END_DATE",   r.get("ND_END_DT", ""))),
+            "payment_date":      _parse_date(r.get("payment_date", r.get("PAYMENT_DATE", r.get("paymentDate", "")))),
             "announcement_date": None,
             "source":            "BSE",
             "ingested_at":       _now_utc(),
