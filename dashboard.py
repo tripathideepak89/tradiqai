@@ -2429,6 +2429,34 @@ async def health_check():
     """Health check endpoint"""
     return {"status": "ok", "timestamp": now_ist().isoformat()}
 
+@app.get("/api/bot-status")
+async def bot_status():
+    """Check if the trading bot (main.py) is running"""
+    import subprocess, os
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", "main.py"],
+            capture_output=True, text=True, timeout=3
+        )
+        pids = result.stdout.strip().split("\n") if result.stdout.strip() else []
+        running = len(pids) > 0 and result.returncode == 0
+
+        # Also check for a heartbeat file written by the bot
+        heartbeat_path = "logs/bot_heartbeat.txt"
+        heartbeat = None
+        if os.path.exists(heartbeat_path):
+            with open(heartbeat_path) as f:
+                heartbeat = f.read().strip()
+
+        return {
+            "bot_running": running,
+            "pids": pids,
+            "heartbeat": heartbeat,
+            "checked_at": now_ist().isoformat()
+        }
+    except Exception as e:
+        return {"bot_running": None, "error": str(e), "checked_at": now_ist().isoformat()}
+
 @app.post("/api/place_order")
 async def place_order(
     order_data: dict,

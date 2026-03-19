@@ -286,6 +286,15 @@ class TradingSystem:
 
         while self.is_running:
             try:
+                # Write heartbeat so dashboard /api/bot-status can confirm we're alive
+                try:
+                    import os as _os
+                    _os.makedirs('logs', exist_ok=True)
+                    with open('logs/bot_heartbeat.txt', 'w') as _hb:
+                        _hb.write(now_ist().isoformat())
+                except Exception:
+                    pass
+
                 # Daily cleanup of old rejected-trade records (runs once per calendar day)
                 try:
                     from datetime import date as _date
