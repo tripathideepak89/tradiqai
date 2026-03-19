@@ -1,53 +1,105 @@
 ---
 name: "Implement"
-description: "Execute an implementation plan step-by-step, tracking progress with todos, verifying each step works before moving on, and summarising what was done."
+description: "Execute a TradiqAI implementation plan step-by-step with todo tracking, per-step verification, safe git commits, and a completion summary including Railway deploy guidance."
 ---
 
-# Implement Skill
+# Implement Skill — TradiqAI
 
-Your job is to execute a plan precisely and carefully — one step at a time, verifying as you go.
+Execute the plan precisely — one step at a time, verifying before moving on.
+
+## Pre-flight Checklist
+
+Before starting, confirm:
+- [ ] Plan from `/plan` is in context
+- [ ] Understand which process is affected: `main.py`, `dashboard.py`, or both
+- [ ] Know which data store is used: Supabase or SQLAlchemy
+- [ ] Know if a Railway redeploy is required
 
 ## Process
 
-1. **Load the plan** — Ask the user for the plan (from `/plan`) if not already in context. Do not start coding without a plan.
+1. **Create a todo list** using TodoWrite — one item per plan step. Mark complete as you go.
 
-2. **Create a todo list** — Break the plan into discrete tasks using TodoWrite. Mark each task as you complete it.
+2. **Execute step by step:**
+   - Read the file before editing it (always)
+   - Make only the changes the plan specifies
+   - Do not refactor surrounding code, add comments, or clean up unrelated things
+   - After each step: verify syntax is valid, imports resolve, logic is correct
 
-3. **Execute step by step**:
-   - Complete one step fully before moving to the next
-   - Read files before editing them
-   - Make the minimal change needed — do not add unrequested features, refactors, or cleanup
-   - After each step, verify it works (run tests if available, check for syntax errors, check imports)
+3. **TradiqAI-specific verification per step:**
 
-4. **When a step fails or surprises you**:
-   - Stop and diagnose before continuing
-   - If the plan was wrong, explain what you found and propose an adjustment
-   - Do NOT bulldoze past errors or try the same failing approach repeatedly
+   *Adding a new API route:*
+   - Route registered in `dashboard.py` inside try/except block?
+   - Auth dependency `Depends(get_current_user)` present if protected?
+   - Test: `curl https://tradiqai.com/api/<route>` or open in browser
 
-5. **After all steps are complete**, write a short summary:
+   *Changing a strategy:*
+   - Time filter still respected (`TimeFilter.can_enter_new_trade()`)?
+   - Rejected trade written on signal rejection (`order_manager.record_rejected_trade()`)?
+   - Test: check `/audit/rejected-trades` during 09:45–11:30 or 13:45–14:45 IST
+
+   *Changing quote fetching:*
+   - Using existing `quote_cache` in `dashboard.py`?
+   - Batch size ≤ 5, delay between batches?
+   - Market hours gate (`is_market_open()`) applied?
+
+   *Changing `main.py` or trading bot:*
+   - After deploy: check `/api/bot-status` — `bot_running: true` + recent `heartbeat`?
+   - Scan logs: `[TRADING BOT] Starting main.py...` in Railway logs?
+
+   *Changing templates:*
+   - Auth uses `localStorage.getItem('access_token')` → `Authorization: Bearer <token>`?
+   - API calls go to `/api/...` (not `/auth/me` — known past bug)?
+   - IST timezone displayed correctly to user?
+
+   *Changing Dockerfile / start.sh / .dockerignore:*
+   - `start.sh` NOT in `.dockerignore`?
+   - Uses `python3` not `python3.11`?
+   - `set +e` in the trading bot subshell?
+
+4. **On failure or surprise:** Stop. Diagnose. Explain what you found. Propose a plan adjustment. Do NOT retry the same failing approach.
+
+5. **Commit when a logical unit is complete:**
+   ```
+   git add <specific files>
+   git commit -m "type: description of what and why"
+   # Do NOT commit .env, *.key, credentials files
+   # Do NOT use --no-verify
+   ```
+
+6. **Completion summary:**
 
 ```
 ## Implementation Complete: <feature name>
 
-### What was done
-- Bullet list of actual changes made (with file references)
+### Changes Made
+- `file.py:line` — what changed and why
+- (one bullet per file)
 
-### What was NOT done / deferred
+### Not Done / Deferred
 - Anything skipped with reason
 
-### How to verify
-- Step-by-step manual test instructions
-- Which automated tests to run
+### How to Verify
+1. Exact manual test steps (include IST time if market-hours dependent)
+2. Railway log lines to confirm: "[TRADING BOT] ..." / specific INFO messages
+3. Supabase table to check (table name + what to look for)
+4. API endpoint to hit: GET/POST https://tradiqai.com/api/<route>
+
+### Railway Deploy
+- [ ] Push triggers auto-deploy (code/template only changes)
+- [ ] Docker rebuild needed — watch Railway build logs (~3-5 min)
+- [ ] New env vars to set in Railway dashboard
+- [ ] Run `/api/bot-status` after deploy to confirm bot is alive
 
 ### Follow-up
-- Any technical debt introduced
+- Technical debt introduced
 - Recommended next steps
 ```
 
-## Rules
-- **Read before editing** — always use the Read tool before making changes to a file.
-- **Minimal changes** — only change what the plan requires. Leave surrounding code alone.
-- **No speculative improvements** — do not refactor, rename, or "clean up" code not directly related to the task.
-- **Stop on blockers** — if something is blocked (missing env var, failing import, API error), surface it immediately. Do not retry the same thing repeatedly.
-- **Commit-ready output** — each step should produce code that compiles/runs. No half-done changes.
-- **One file at a time** — complete edits to one file before moving to the next where possible.
+## Hard Rules
+- **Read before editing** — always use the Read tool first
+- **Minimal changes** — only what the plan requires
+- **No speculative improvements** — don't touch unrelated code
+- **Stop on blockers** — surface errors immediately, don't retry blindly
+- **One file at a time** where possible
+- **Never commit secrets** — `.env`, `*.key`, API tokens
+- **Never skip hooks** — don't use `--no-verify`
