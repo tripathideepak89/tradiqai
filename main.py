@@ -667,7 +667,10 @@ class TradingSystem:
                 
                 # Check for exits (targets, stop losses, end of day)
                 await self._check_position_exits()
-                
+
+                # Yield to the other loops; without this the monitor spins and starves the event loop
+                await asyncio.sleep(10)
+
             except Exception as e:
                 logger.error(f"Position monitor error: {e}")
                 await asyncio.sleep(60)
