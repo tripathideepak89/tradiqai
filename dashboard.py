@@ -2297,14 +2297,19 @@ async def health_check():
 @app.get("/api/bot-status")
 async def bot_status():
     """Check if the trading bot (main.py) is running"""
-    import subprocess, os
+    import os
     try:
-        result = subprocess.run(
-            ["pgrep", "-f", "main.py"],
-            capture_output=True, text=True, timeout=3
-        )
-        pids = result.stdout.strip().split("\n") if result.stdout.strip() else []
-        running = len(pids) > 0 and result.returncode == 0
+        # Scan /proc instead of pgrep (procps isn't installed in the slim image)
+        pids = []
+        for pid in filter(str.isdigit, os.listdir("/proc")):
+            try:
+                with open(f"/proc/{pid}/cmdline", "rb") as f:
+                    cmdline = f.read().replace(b"\0", b" ").decode(errors="ignore")
+            except OSError:
+                continue
+            if "main.py" in cmdline and "uvicorn" not in cmdline:
+                pids.append(pid)
+        running = len(pids) > 0
 
         # Also check for a heartbeat file written by the bot
         heartbeat_path = "logs/bot_heartbeat.txt"
