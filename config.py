@@ -42,16 +42,9 @@ class Settings(BaseSettings):
     consecutive_loss_limit: int = 3
     consecutive_loss_pause_minutes: int = 60
     
-    # Broker Selection
-    broker: str = "zerodha"  # zerodha or groww
-    
-    # Zerodha
-    zerodha_api_key: Optional[str] = None
-    zerodha_api_secret: Optional[str] = None
-    zerodha_user_id: Optional[str] = None
-    zerodha_password: Optional[str] = None
-    zerodha_totp_secret: Optional[str] = None
-    
+    # Broker Selection (Groww is the only supported broker)
+    broker: str = "groww"
+
     # Groww
     groww_api_key: Optional[str] = None
     groww_api_secret: Optional[str] = None
@@ -77,7 +70,7 @@ class Settings(BaseSettings):
     market_close_time: str = "15:30"
     
     # Strategy
-    enable_intraday: bool = True
+    enable_intraday: bool = False  # Intraday (LiveSimple, news auto-trades, MIS, shorts) disabled — SDOE delivery only
     enable_swing: bool = False
     paper_trading: bool = False  # LIVE TRADING ENABLED - Real orders to broker
     

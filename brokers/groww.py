@@ -2,15 +2,18 @@
 import logging
 import uuid
 import asyncio
+import hashlib
+import time
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 import aiohttp
 import json
 
 from brokers.base import (
-    BaseBroker, Order, Position, Quote, OrderType, 
+    BaseBroker, Order, Position, Quote, OrderType,
     OrderStatus, TransactionType
 )
+from utils.timezone import IST, now_ist
 
 logger = logging.getLogger(__name__)
 
@@ -28,34 +31,91 @@ class GrowwBroker(BaseBroker):
         self.api_secret = config.get("api_secret")
         self.api_url = config.get("api_url", "https://api.groww.in/v1")
         self.session: Optional[aiohttp.ClientSession] = None
-        
+
+        # Daily access token, obtained by exchanging api_key + api_secret.
+        # Groww resets it every morning at 6:00 IST.
+        self.access_token: Optional[str] = None
+        self.token_expiry: Optional[datetime] = None
+        self.token_fetched_at: Optional[datetime] = None
+
         if not self.api_key or not self.api_secret:
             logger.error("Groww API credentials not provided")
-    
+
     def _get_headers(self) -> Dict[str, str]:
         """Get API request headers"""
         return {
+            "Authorization": f"Bearer {self.access_token}",
+            "X-API-VERSION": "1.0",
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+
+    @staticmethod
+    def _next_reset_ist() -> datetime:
+        """Next 6:00 IST, when Groww resets access tokens"""
+        now = now_ist()
+        reset = now.replace(hour=6, minute=0, second=0, microsecond=0)
+        return reset if now < reset else reset + timedelta(days=1)
+
+    async def _refresh_access_token(self) -> None:
+        """Exchange api_key + api_secret for a daily access token"""
+        if not self.session:
+            self.session = aiohttp.ClientSession()
+
+        timestamp = str(int(time.time()))
+        checksum = hashlib.sha256((self.api_secret + timestamp).encode()).hexdigest()
+        headers = {
             "Authorization": f"Bearer {self.api_key}",
             "X-API-VERSION": "1.0",
             "Content-Type": "application/json",
             "Accept": "application/json"
         }
-    
+
+        async with self.session.post(
+            f"{self.api_url}/token/api/access",
+            headers=headers,
+            json={"key_type": "approval", "checksum": checksum, "timestamp": timestamp}
+        ) as response:
+            response_text = await response.text()
+            if response.status >= 400:
+                raise Exception(f"Groww token exchange failed [{response.status}]: {response_text[:300]}")
+            response_data = json.loads(response_text)
+
+        token = response_data.get("token")
+        if not token:
+            raise Exception("Groww token exchange returned no token")
+
+        # Expiry comes back as naive IST, e.g. "2026-10-30T06:00:00"
+        try:
+            expiry = datetime.fromisoformat(response_data["expiry"]).replace(tzinfo=IST)
+        except (KeyError, TypeError, ValueError):
+            expiry = self._next_reset_ist()
+
+        self.access_token = token
+        self.token_expiry = expiry
+        self.token_fetched_at = now_ist()
+        logger.info(f"Groww access token refreshed, valid until {expiry:%Y-%m-%d %H:%M} IST")
+
     async def _make_request(
         self,
         method: str,
         endpoint: str,
         data: Optional[Dict] = None,
-        params: Optional[Dict] = None
+        params: Optional[Dict] = None,
+        retry_auth: bool = True
     ) -> Dict:
         """Make HTTP request to Groww API"""
         try:
             if not self.session:
                 self.session = aiohttp.ClientSession()
-            
+
+            if not self.access_token or now_ist() >= self.token_expiry:
+                await self._refresh_access_token()
+
             url = f"{self.api_url}/{endpoint}"
             headers = self._get_headers()
-            
+            auth_rejected = False
+
             async with self.session.request(
                 method,
                 url,
@@ -65,12 +125,18 @@ class GrowwBroker(BaseBroker):
             ) as response:
                 # Get response text first
                 response_text = await response.text()
-                
+
                 # Log raw response for debugging
                 logger.debug(f"Groww API response [{response.status}]: {response_text[:500]}")
-                
+
+                # Token rejected (e.g. reset at 6:00 IST) - refresh once and retry below.
+                # Skip if the token is fresh: the token API allows only 150 calls/day.
+                if (response.status in (401, 403) and retry_auth
+                        and now_ist() - self.token_fetched_at > timedelta(minutes=1)):
+                    auth_rejected = True
+
                 # Handle non-JSON responses
-                if response.status >= 400:
+                elif response.status >= 400:
                     try:
                         response_data = json.loads(response_text)
                         error_msg = response_data.get('message', response_text)
@@ -81,18 +147,24 @@ class GrowwBroker(BaseBroker):
                     raise Exception(f"API error [{response.status}]: {error_msg}")
                 
                 # Parse JSON response
-                try:
-                    response_data = json.loads(response_text)
-                    # Groww API wraps response in {"status": "SUCCESS", "payload": {...}}
-                    if response_data.get("status") == "SUCCESS":
-                        return response_data.get("payload", response_data)
-                    else:
-                        error_msg = response_data.get("message", "Unknown error")
-                        raise Exception(f"API returned failure status: {error_msg}")
-                except json.JSONDecodeError:
-                    logger.error(f"Failed to parse JSON response: {response_text[:500]}")
-                    raise Exception(f"Invalid JSON response from API")
-        
+                else:
+                    try:
+                        response_data = json.loads(response_text)
+                        # Groww API wraps response in {"status": "SUCCESS", "payload": {...}}
+                        if response_data.get("status") == "SUCCESS":
+                            return response_data.get("payload", response_data)
+                        else:
+                            error_msg = response_data.get("message", "Unknown error")
+                            raise Exception(f"API returned failure status: {error_msg}")
+                    except json.JSONDecodeError:
+                        logger.error(f"Failed to parse JSON response: {response_text[:500]}")
+                        raise Exception(f"Invalid JSON response from API")
+
+            if auth_rejected:
+                logger.warning(f"Groww rejected access token on {endpoint}, refreshing and retrying once")
+                await self._refresh_access_token()
+                return await self._make_request(method, endpoint, data, params, retry_auth=False)
+
         except Exception as e:
             logger.error(f"Groww API request failed: {e}")
             raise
@@ -484,62 +556,44 @@ class GrowwBroker(BaseBroker):
                 "used_margin": 0.0
             }
     
-    async def get_top_gainers(self, limit: int = 20, index: str = "NIFTY_500") -> List[Dict]:
-        """Get top gainers from Groww
+    async def get_top_gainers(self, symbols: List[str], limit: int = 20) -> List[Dict]:
+        """Get top gainers among the given NSE symbols
+        
+        Groww has no market-movers endpoint, so day change is computed from the
+        bulk LTP and OHLC endpoints (max 50 symbols per call). The OHLC "close"
+        is the previous session's close.
         
         Args:
-            limit: Number of stocks to fetch (default 20)
-            index: Index to fetch from (NIFTY_500, NIFTY_200, etc.)
+            symbols: NSE trading symbols to rank, e.g. ["RELIANCE", "TCS"]
+            limit: Number of stocks to return (default 20)
             
         Returns:
-            List of dicts with symbol, ltp, day_change_percent
+            List of dicts with symbol, ltp, day_change_percent, highest change first
         """
         try:
-            # Try different possible endpoints
-            endpoints_to_try = [
-                "discover/top-gainers",
-                "screener/top-gainers", 
-                "market/top-gainers",
-                "live-data/market-movers/gainers",
-                "market-data/top-gainers"
-            ]
+            result = []
+            for i in range(0, len(symbols), 50):
+                exchange_symbols = ",".join(f"NSE_{s}" for s in symbols[i:i + 50])
+                params = {"segment": "CASH", "exchange_symbols": exchange_symbols}
+                ltps = await self._make_request("GET", "live-data/ltp", params=params)
+                ohlcs = await self._make_request("GET", "live-data/ohlc", params=params)
+                
+                for symbol in symbols[i:i + 50]:
+                    ltp = ltps.get(f"NSE_{symbol}")
+                    prev_close = (ohlcs.get(f"NSE_{symbol}") or {}).get("close")
+                    # Unknown/renamed symbols come back missing or with null prices
+                    if not ltp or not prev_close:
+                        logger.debug(f"No live data for {symbol}, skipping")
+                        continue
+                    result.append({
+                        "symbol": symbol,
+                        "ltp": ltp,
+                        "day_change_percent": (ltp - prev_close) / prev_close * 100
+                    })
             
-            for endpoint in endpoints_to_try:
-                try:
-                    response = await self._make_request(
-                        "GET",
-                        endpoint,
-                        params={
-                            "index": index,
-                            "limit": limit,
-                            "exchange": "NSE",
-                            "segment": "CASH"
-                        }
-                    )
-                    
-                    # Check if we got valid data
-                    gainers = response.get("stocks", response.get("data", response.get("gainers", [])))
-                    
-                    if gainers and len(gainers) > 0:
-                        # Extract relevant data
-                        result = []
-                        for stock in gainers[:limit]:
-                            result.append({
-                                "symbol": stock.get("trading_symbol", stock.get("symbol", "")),
-                                "ltp": stock.get("ltp", stock.get("last_price", 0)),
-                                "day_change_percent": stock.get("day_change_perc", stock.get("day_change_percent", 0))
-                            })
-                        
-                        logger.info(f"✓ Fetched {len(result)} top gainers from {endpoint}")
-                        return result
-                        
-                except Exception as e:
-                    logger.debug(f"Endpoint {endpoint} failed: {e}")
-                    continue
-            
-            # If all endpoints fail
-            logger.warning("All top gainers endpoints failed")
-            return []
+            result.sort(key=lambda s: s["day_change_percent"], reverse=True)
+            logger.info(f"✓ Ranked {len(result)}/{len(symbols)} symbols for top gainers")
+            return result[:limit]
             
         except Exception as e:
             logger.error(f"Failed to get top gainers from Groww: {e}")

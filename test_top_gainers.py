@@ -25,9 +25,15 @@ async def test_top_gainers():
             print("Failed to connect")
             return
         
-        # Fetch top gainers
-        print("\nFetching top 20 gainers...")
-        gainers = await broker.get_top_gainers(limit=20)
+        # Fetch top gainers (Groww has no movers endpoint, so we rank a symbol list)
+        symbols = [
+            "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "HINDUNILVR", "ITC", "SBIN",
+            "BHARTIARTL", "BAJFINANCE", "KOTAKBANK", "LT", "AXISBANK", "ASIANPAINT", "MARUTI",
+            "SUNPHARMA", "TITAN", "ULTRACEMCO", "NTPC", "POWERGRID", "TATASTEEL", "HINDALCO",
+            "JSWSTEEL", "ONGC", "WIPRO", "HCLTECH", "TECHM", "ADANIPORTS", "ADANIENT", "CIPLA"
+        ]
+        print(f"\nFetching top 20 gainers among {len(symbols)} symbols...")
+        gainers = await broker.get_top_gainers(symbols, limit=20)
         
         if gainers:
             print(f"\n✓ Found {len(gainers)} gainers:\n")

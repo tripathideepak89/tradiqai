@@ -83,25 +83,18 @@ class TradingSystem:
             init_db()
             logger.info("[OK] Database initialized")
             
-            # 2. Initialize broker
-            broker_name = settings.broker.lower()
+            # 2. Initialize broker (Groww only)
+            broker_name = "groww"
+            if settings.broker.lower() != broker_name:
+                logger.warning(f"BROKER={settings.broker} is not supported — using groww")
             logger.info(f"Using broker: {broker_name}")
-            
-            if broker_name == "zerodha":
-                broker_config = {
-                    "api_key": settings.zerodha_api_key,
-                    "api_secret": settings.zerodha_api_secret,
-                    "user_id": settings.zerodha_user_id,
-                    "password": settings.zerodha_password,
-                    "totp_secret": settings.zerodha_totp_secret
-                }
-            else:  # groww
-                broker_config = {
-                    "api_key": settings.groww_api_key,
-                    "api_secret": settings.groww_api_secret,
-                    "api_url": settings.groww_api_url
-                }
-            
+
+            broker_config = {
+                "api_key": settings.groww_api_key,
+                "api_secret": settings.groww_api_secret,
+                "api_url": settings.groww_api_url
+            }
+
             self.broker = BrokerFactory.create_broker(broker_name, broker_config)
             
             # Connect to broker
@@ -169,8 +162,11 @@ class TradingSystem:
             
             # 5. Initialize strategies with broker (for pre-entry checks)
             # Using professional live-quote strategy with pre-entry checklist
-            self.strategies.append(LiveSimpleStrategy(broker=self.broker))
-            logger.info("[OK] Live Simple strategy loaded with PRE-ENTRY CHECKLIST and ADAPTIVE TARGETS")
+            if settings.enable_intraday:
+                self.strategies.append(LiveSimpleStrategy(broker=self.broker))
+                logger.info("[OK] Live Simple strategy loaded with PRE-ENTRY CHECKLIST and ADAPTIVE TARGETS")
+            else:
+                logger.info("[INFO] Intraday disabled (ENABLE_INTRADAY=false) - Live Simple strategy not loaded")
             
             # 6. Initialize monitoring
             self.monitoring = MonitoringService()
@@ -1046,6 +1042,11 @@ class TradingSystem:
                         
                         # If action is TRADE_MODE, check governance and potentially execute
                         if impact_score.action == NewsAction.TRADE_MODE:
+                            # News auto-trades are intraday-style; skip while intraday is disabled
+                            if not settings.enable_intraday:
+                                logger.info(f"[NEWS] Auto-trade skipped for {news.symbol} - intraday disabled")
+                                continue
+
                             # Check all governance rules
                             passed, violations = self.news_governance.check_all_news_governance(
                                 news_timestamp=news.timestamp,

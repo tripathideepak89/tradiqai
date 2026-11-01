@@ -619,53 +619,10 @@
                     <label class="form-label">Select Broker</label>
                     <select id="broker-select" class="form-select" required>
                         <option value="">-- Choose a broker --</option>
-                        <option value="zerodha">Zerodha (Kite Connect)</option>
                         <option value="groww">Groww</option>
-                        <option value="upstox">Upstox</option>
-                        <option value="angelone">Angel One</option>
-                        <option value="fyers">Fyers</option>
                         <option value="paper">Paper Trading (No Broker)</option>
                     </select>
                     <p class="form-help">Choose your trading broker. API credentials will be securely stored.</p>
-                </div>
-
-                <!-- Zerodha Fields -->
-                <div id="zerodha-fields" class="broker-fields">
-                    <div class="broker-logo">
-                        <div class="broker-logo-placeholder">Z</div>
-                        <div class="broker-info">
-                            <h4>Zerodha Kite Connect</h4>
-                            <p>India's largest retail broker</p>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">API Key</label>
-                        <input type="text" id="zerodha-api-key" class="form-input" placeholder="Enter your Kite Connect API Key">
-                        <p class="form-help">Found in Kite Connect developer portal</p>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">API Secret</label>
-                        <div class="password-wrapper">
-                            <input type="password" id="zerodha-api-secret" class="form-input" placeholder="Enter your API Secret">
-                            <button type="button" class="password-toggle" onclick="togglePassword('zerodha-api-secret')">👁️</button>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">User ID</label>
-                        <input type="text" id="zerodha-user-id" class="form-input" placeholder="Your Zerodha User ID (e.g., AB1234)">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">TOTP Secret (Optional)</label>
-                        <div class="password-wrapper">
-                            <input type="password" id="zerodha-totp-secret" class="form-input" placeholder="For automated 2FA login">
-                            <button type="button" class="password-toggle" onclick="togglePassword('zerodha-totp-secret')">👁️</button>
-                        </div>
-                        <p class="form-help">Required for fully automated login. Get from authenticator app setup.</p>
-                    </div>
                 </div>
 
                 <!-- Groww Fields -->
@@ -689,101 +646,6 @@
                             <input type="password" id="groww-api-secret" class="form-input" placeholder="Enter your API Secret">
                             <button type="button" class="password-toggle" onclick="togglePassword('groww-api-secret')">👁️</button>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Upstox Fields -->
-                <div id="upstox-fields" class="broker-fields">
-                    <div class="broker-logo">
-                        <div class="broker-logo-placeholder" style="background: linear-gradient(135deg, #7b2cf5, #5a1fc7);">U</div>
-                        <div class="broker-info">
-                            <h4>Upstox</h4>
-                            <p>Pro trading platform</p>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">API Key</label>
-                        <input type="text" id="upstox-api-key" class="form-input" placeholder="Enter your Upstox API Key">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">API Secret</label>
-                        <div class="password-wrapper">
-                            <input type="password" id="upstox-api-secret" class="form-input" placeholder="Enter your API Secret">
-                            <button type="button" class="password-toggle" onclick="togglePassword('upstox-api-secret')">👁️</button>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Redirect URI</label>
-                        <input type="text" id="upstox-redirect-uri" class="form-input" placeholder="https://your-app.com/callback" value="http://localhost:8000/callback">
-                    </div>
-                </div>
-
-                <!-- Angel One Fields -->
-                <div id="angelone-fields" class="broker-fields">
-                    <div class="broker-logo">
-                        <div class="broker-logo-placeholder" style="background: linear-gradient(135deg, #ff6b35, #e85d2e);">A</div>
-                        <div class="broker-info">
-                            <h4>Angel One (SmartAPI)</h4>
-                            <p>Full-service stockbroker</p>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">API Key</label>
-                        <input type="text" id="angelone-api-key" class="form-input" placeholder="Enter your SmartAPI Key">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Client ID</label>
-                        <input type="text" id="angelone-client-id" class="form-input" placeholder="Your Angel One Client ID">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Password</label>
-                        <div class="password-wrapper">
-                            <input type="password" id="angelone-password" class="form-input" placeholder="Your trading password">
-                            <button type="button" class="password-toggle" onclick="togglePassword('angelone-password')">👁️</button>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">TOTP Secret</label>
-                        <div class="password-wrapper">
-                            <input type="password" id="angelone-totp" class="form-input" placeholder="For 2FA authentication">
-                            <button type="button" class="password-toggle" onclick="togglePassword('angelone-totp')">👁️</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Fyers Fields -->
-                <div id="fyers-fields" class="broker-fields">
-                    <div class="broker-logo">
-                        <div class="broker-logo-placeholder" style="background: linear-gradient(135deg, #1e88e5, #1565c0);">F</div>
-                        <div class="broker-info">
-                            <h4>Fyers</h4>
-                            <p>Trade smarter, trade better</p>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">App ID</label>
-                        <input type="text" id="fyers-app-id" class="form-input" placeholder="Enter your Fyers App ID">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Secret Key</label>
-                        <div class="password-wrapper">
-                            <input type="password" id="fyers-secret-key" class="form-input" placeholder="Enter your Secret Key">
-                            <button type="button" class="password-toggle" onclick="togglePassword('fyers-secret-key')">👁️</button>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Redirect URI</label>
-                        <input type="text" id="fyers-redirect-uri" class="form-input" placeholder="https://your-app.com/callback" value="http://localhost:8000/callback">
                     </div>
                 </div>
 
@@ -946,11 +808,7 @@
     <script>
         // Broker field mappings
         const brokerFields = {
-            zerodha: ['zerodha-api-key', 'zerodha-api-secret', 'zerodha-user-id', 'zerodha-totp-secret'],
             groww: ['groww-api-key', 'groww-api-secret'],
-            upstox: ['upstox-api-key', 'upstox-api-secret', 'upstox-redirect-uri'],
-            angelone: ['angelone-api-key', 'angelone-client-id', 'angelone-password', 'angelone-totp'],
-            fyers: ['fyers-app-id', 'fyers-secret-key', 'fyers-redirect-uri'],
             paper: ['paper-capital']
         };
 

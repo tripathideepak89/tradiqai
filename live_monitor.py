@@ -233,24 +233,15 @@ async def fetch_live_data(broker):
 async def main_loop():
     """Main monitoring loop"""
     # Initialize broker
-    broker_name = settings.broker
-    
-    # Prepare broker config
-    if broker_name == "zerodha":
-        broker_config = {
-            "api_key": settings.zerodha_api_key,
-            "api_secret": settings.zerodha_api_secret,
-            "user_id": settings.zerodha_user_id,
-            "password": settings.zerodha_password,
-            "totp_secret": settings.zerodha_totp_secret
-        }
-    else:  # groww
-        broker_config = {
-            "api_key": settings.groww_api_key,
-            "api_secret": settings.groww_api_secret,
-            "api_url": settings.groww_api_url
-        }
-    
+    broker_name = "groww"
+
+    # Prepare broker config (Groww only)
+    broker_config = {
+        "api_key": settings.groww_api_key,
+        "api_secret": settings.groww_api_secret,
+        "api_url": settings.groww_api_url
+    }
+
     broker = BrokerFactory.create_broker(broker_name, broker_config)
     
     await broker.connect()

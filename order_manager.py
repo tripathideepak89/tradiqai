@@ -136,7 +136,35 @@ class OrderManager:
         """
         try:
             logger.info(f"Executing signal for {signal.symbol}: {signal.action}")
-            
+
+            # 0a. Intraday disabled: only long delivery (CNC) entries are allowed
+            if not settings.enable_intraday:
+                product = getattr(signal, 'product', 'CNC')
+                is_intraday = (
+                    product == "MIS"
+                    or signal.action != "BUY"
+                    or strategy_name in ("LiveSimple", "NewsImpact")
+                )
+                if is_intraday:
+                    logger.warning(
+                        f"[X] {signal.symbol} REJECTED: intraday disabled "
+                        f"(strategy={strategy_name}, action={signal.action}, product={product})"
+                    )
+                    if _audit_enabled():
+                        from rejected_trades import RejectionReason
+                        self._log_rejection(signal, strategy_name, [
+                            RejectionReason(
+                                code="INTRADAY_DISABLED",
+                                message=(
+                                    f"Intraday trading disabled — only long CNC entries allowed "
+                                    f"(strategy={strategy_name}, action={signal.action}, product={product})"
+                                ),
+                                rule_name="execute_signal.intraday_disabled",
+                                rule_value="ENABLE_INTRADAY=false",
+                            )
+                        ], self._build_rejection_snapshot(signal.symbol))
+                    return None
+
             # 0. CRITICAL: Validate intraday trading hours (9:15 AM - 3:20 PM IST)
             # MIS (Margin Intraday Squareoff) orders can only be placed during market hours
             from datetime import time

@@ -61,8 +61,7 @@ SCORE_CONFIG = {
 
 # ─────────────────────────────────────────────
 #  PRICE DATA FETCHER
-#  Primary: Zerodha Kite Connect (server-IP friendly, requires KITE_ACCESS_TOKEN)
-#  Fallback: yfinance (Yahoo Finance)
+#  Source: yfinance (Yahoo Finance)
 # ─────────────────────────────────────────────
 
 def _fetch_price_data(symbol: str) -> Optional[dict]:
@@ -71,21 +70,9 @@ def _fetch_price_data(symbol: str) -> Optional[dict]:
     Returns dict with keys: price, sma20, sma50, sma200, above_20dma, above_50dma, above_200dma
     or None on failure.
 
-    Tries Kite Connect first (reliable from server IPs), falls back to yfinance.
     NSE suffix for yfinance: symbol + ".NS"   e.g. "ITC.NS"
     """
-    # ── Primary: Zerodha Kite Connect ──────────────────────────────
-    try:
-        from kite_client import get_kite
-        kite = get_kite()
-        result = kite.fetch_price_data(symbol)
-        if result:
-            logger.debug(f"Kite price data: {symbol} ₹{result['price']:.2f}")
-            return result
-    except Exception as exc:
-        logger.debug(f"Kite price fetch skipped for {symbol}: {exc}")
-
-    # ── Fallback: yfinance ──────────────────────────────────────────
+    # ── yfinance ────────────────────────────────────────────────────
     try:
         import yfinance as yf
         ticker = f"{symbol}.NS"

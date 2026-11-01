@@ -5,5 +5,11 @@
       "Bash(python -c \":*)",
       "Bash(pip install jinja2 --quiet)"
     ]
-  }
+  },
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
+  },
+  "plansDirectory": ".claude/work/plans"
 }

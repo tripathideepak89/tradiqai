@@ -69,16 +69,9 @@ app = FastAPI(title="TradiqAI Dashboard")
 
 # ── Broker Configuration Model ──────────────────────────────────────────────
 class BrokerConfigRequest(BaseModel):
-    broker: str
+    broker: str  # "groww" or "paper"
     api_key: str = None
     api_secret: str = None
-    user_id: str = None
-    totp_secret: str = None
-    client_id: str = None
-    password: str = None
-    app_id: str = None
-    secret_key: str = None
-    redirect_uri: str = None
     capital: float = None
 
 
@@ -218,10 +211,6 @@ async def get_broker_config():
         # Add masked versions of keys
         if _broker_config.get("api_key"):
             safe_config["api_key"] = _broker_config["api_key"][:4] + "****" if len(_broker_config["api_key"]) > 4 else "****"
-        if _broker_config.get("user_id"):
-            safe_config["user_id"] = _broker_config.get("user_id")
-        if _broker_config.get("client_id"):
-            safe_config["client_id"] = _broker_config.get("client_id")
         if _broker_config.get("capital"):
             safe_config["capital"] = _broker_config.get("capital")
         return safe_config
@@ -230,27 +219,23 @@ async def get_broker_config():
 
 @app.post("/api/broker/config")
 async def save_broker_config(config: BrokerConfigRequest):
-    """Save broker configuration"""
+    """Save broker configuration (Groww or paper trading only)"""
     global _broker_config
-    
+
+    broker = config.broker.lower()
+    if broker not in ("groww", "paper"):
+        return JSONResponse(
+            {"detail": f"Unsupported broker: {broker} (only Groww is supported)"},
+            status_code=400
+        )
+
     # Convert to dict and store
     config_dict = config.model_dump(exclude_none=True)
     _broker_config = config_dict
     _broker_config["connected"] = False  # Will be set to True after successful test
-    
+
     # Also update environment variables for the trading system
-    broker = config.broker.lower()
-    
-    if broker == "zerodha":
-        if config.api_key:
-            os.environ["ZERODHA_API_KEY"] = config.api_key
-        if config.api_secret:
-            os.environ["ZERODHA_API_SECRET"] = config.api_secret
-        if config.user_id:
-            os.environ["ZERODHA_USER_ID"] = config.user_id
-        if config.totp_secret:
-            os.environ["ZERODHA_TOTP_SECRET"] = config.totp_secret
-    elif broker == "groww":
+    if broker == "groww":
         if config.api_key:
             os.environ["GROWW_API_KEY"] = config.api_key
         if config.api_secret:
@@ -278,40 +263,17 @@ async def test_broker_connection(config: BrokerConfigRequest):
         _broker_config["connected"] = True
         return {"connected": True, "message": "Paper trading mode active"}
     
-    # For real brokers, attempt connection test
+    # Groww is the only supported live broker
     try:
-        if broker == "zerodha":
-            # Test Zerodha connection
-            if not config.api_key or not config.api_secret:
-                return {"connected": False, "message": "API Key and Secret are required"}
-            
-            try:
-                from kiteconnect import KiteConnect
-                kite = KiteConnect(api_key=config.api_key)
-                # Can't fully test without login, but we can validate the API key format
-                if len(config.api_key) < 8:
-                    return {"connected": False, "message": "Invalid API Key format"}
-                _broker_config["connected"] = True
-                return {"connected": True, "message": "Zerodha credentials validated"}
-            except ImportError:
-                return {"connected": False, "message": "kiteconnect package not installed"}
-            except Exception as e:
-                return {"connected": False, "message": str(e)}
-                
-        elif broker == "groww":
+        if broker == "groww":
             # Test Groww connection
             if not config.api_key or not config.api_secret:
                 return {"connected": False, "message": "API Key and Secret are required"}
             _broker_config["connected"] = True
             return {"connected": True, "message": "Groww credentials validated"}
-            
-        else:
-            # Generic validation for other brokers
-            if not config.api_key:
-                return {"connected": False, "message": "API Key is required"}
-            _broker_config["connected"] = True
-            return {"connected": True, "message": f"{broker.title()} credentials validated"}
-            
+
+        return {"connected": False, "message": f"Unsupported broker: {broker} (only Groww is supported)"}
+
     except Exception as e:
         return {"connected": False, "message": str(e)}
 
@@ -400,90 +362,6 @@ async def save_risk_settings(settings: RiskSettingsRequest):
             status_code=500
         )
 
-
-# ── Zerodha Kite Connect OAuth ───────────────────────────────────────
-@app.get("/api/kite/auth")
-async def kite_auth():
-    """Redirect to Zerodha login to start OAuth flow."""
-    try:
-        from kite_client import get_kite
-        kite = get_kite()
-        if not kite.api_key:
-            return JSONResponse(
-                {"error": "KITE_API_KEY not set in Railway environment"},
-                status_code=503,
-            )
-        return HTMLResponse(
-            f'<html><head><meta http-equiv="refresh" content="0;url={kite.login_url}"></head>'
-            f'<body>Redirecting to Zerodha Kite login...</body></html>'
-        )
-    except Exception as exc:
-        return JSONResponse({"error": str(exc)}, status_code=500)
-
-
-@app.get("/api/kite/callback")
-async def kite_callback(request_token: str = None, status: str = None, message: str = None):
-    """
-    Zerodha redirects here after login.
-    Exchanges request_token → access_token, stores in Supabase.
-    """
-    if status != "success" or not request_token:
-        return HTMLResponse(
-            f"<h2>Kite login failed</h2><p>{message or 'Unknown error'}</p>",
-            status_code=400,
-        )
-    try:
-        from kite_client import get_kite, save_token_to_db
-        kite  = get_kite()
-        token = kite.generate_session(request_token)
-
-        # Persist token to Supabase so it survives scheduler restarts
-        try:
-            db_gen = _get_dre_db()
-            conn   = next(db_gen)
-            save_token_to_db(conn, token)
-            try:
-                next(db_gen)
-            except StopIteration:
-                pass
-        except Exception as _db_err:
-            logger.warning(f"Kite token DB save failed: {_db_err}")
-
-        return HTMLResponse(f"""
-        <html><body style="font-family:monospace;background:#0d1117;color:#e6edf3;padding:40px">
-          <h2>✅ Kite Connected</h2>
-          <p>Access token stored in Supabase.</p>
-          <p>Also add this to <strong>Railway → Variables</strong> for persistence across restarts:</p>
-          <pre style="background:#161b22;padding:16px;border-radius:8px">KITE_ACCESS_TOKEN={token}</pre>
-          <p><a href="/dividend-radar" style="color:#00c4ff">→ Open Dividend Radar</a></p>
-        </body></html>
-        """)
-    except Exception as exc:
-        logger.error(f"Kite callback error: {exc}")
-        return HTMLResponse(f"<h2>Error: {exc}</h2>", status_code=500)
-
-
-@app.get("/api/kite/status")
-async def kite_status():
-    """Check if Kite is connected and token is valid."""
-    try:
-        from kite_client import get_kite
-        kite = get_kite()
-        if not kite.is_configured:
-            return JSONResponse({"connected": False, "reason": "KITE_API_KEY or KITE_ACCESS_TOKEN not set"})
-        # Quick ping — fetch profile
-        resp = kite._session.get(
-            "https://api.kite.trade/user/profile",
-            headers=kite._auth(),
-            timeout=5,
-        )
-        if resp.status_code == 200:
-            name = resp.json().get("data", {}).get("user_name", "")
-            return JSONResponse({"connected": True, "user": name})
-        return JSONResponse({"connected": False, "reason": f"HTTP {resp.status_code}"})
-    except Exception as exc:
-        return JSONResponse({"connected": False, "reason": str(exc)})
-# ────────────────────────────────────────────────────────────────────
 
 # Quote cache (symbol -> {data, timestamp})
 quote_cache = {}
@@ -789,7 +667,7 @@ async def startup_event():
     # Run DRE pipeline immediately on startup so dividend-radar page has data
     # without waiting until 6:30 AM. Runs in a thread (blocking I/O, not async).
     async def _dre_initial_run():
-        await asyncio.sleep(15)   # let DB init and Kite token load finish first
+        await asyncio.sleep(15)   # let DB init finish first
         try:
             import concurrent.futures
             loop = asyncio.get_event_loop()
@@ -800,19 +678,6 @@ async def startup_event():
             logger.warning(f"⚠️ DRE startup pipeline run failed: {_exc}")
 
     asyncio.create_task(_dre_initial_run())
-
-    # Load Kite access_token from Supabase (if previously stored via /api/kite/callback)
-    try:
-        from kite_client import load_token_from_db
-        _db_gen = _get_dre_db()
-        _conn   = next(_db_gen)
-        load_token_from_db(_conn)
-        try:
-            next(_db_gen)
-        except StopIteration:
-            pass
-    except Exception as _ke:
-        logger.debug(f"Kite token not pre-loaded: {_ke}")
 
     logger.info("✅ Dashboard startup complete")
 

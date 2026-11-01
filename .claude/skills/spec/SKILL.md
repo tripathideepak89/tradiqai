@@ -25,7 +25,7 @@ Turn a rough idea into a precise, unambiguous feature spec for the TradiqAI trad
 
 **Key files by concern:**
 - Strategies: `strategies/strong_dip.py`, `strategies/swing.py`, `strategies/intraday.py`, etc.
-- Broker: `brokers/groww.py`, `brokers/zerodha.py`, `brokers/factory.py`
+- Broker: Groww only — `brokers/groww.py` (via `brokers/factory.py`). `brokers/zerodha.py` / `kite_client.py` are legacy; don't spec features against them.
 - Data ingestion: `dividend_ingestion.py`, `dividend_scheduler.py`
 - APIs: `api_portfolio.py`, `api_audit.py`, `api_sdoe.py`
 - Templates: `templates/*.html`

@@ -225,14 +225,6 @@ class DividendRadarScheduler:
             logger.error("DRE: Cannot run — no DB connection.")
             return []
 
-        # Refresh Kite access_token from DB — token expires every 24h so
-        # the startup-loaded singleton may be stale when the daily cron fires.
-        try:
-            from kite_client import load_token_from_db
-            load_token_from_db(conn)
-        except Exception as _kt:
-            logger.debug(f"DRE: Kite token refresh skipped: {_kt}")
-
         # ── Step 1 & 2: Ingest (upsert any new records) ─────────────
         ingestion_svc = DividendIngestionService(conn, window_days=14)
         ingestion_svc.ensure_table()
@@ -246,7 +238,7 @@ class DividendRadarScheduler:
             )
 
         # Always read ALL upcoming dividends from DB so existing records
-        # get rescored with fresh Kite price data even when ingestion returns 0.
+        # get rescored with fresh price data even when ingestion returns 0.
         dividend_records = ingestion_svc.get_upcoming_dividends()
 
         if not dividend_records:

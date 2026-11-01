@@ -82,3 +82,8 @@ tunnel-*.txt
 deploy-tunnel.ps1
 install-service.ps1
 CLOUDFLARE_DEPLOYMENT_GUIDE.md
+
+# Assistant working notes (local only, never pushed)
+.claude/settings.local.json
+.claude/work/
+.claude/memory/
