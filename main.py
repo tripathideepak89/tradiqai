@@ -237,14 +237,45 @@ class TradingSystem:
         except Exception as e:
             logger.error(f"Failed to start DRE scheduler: {e}")
     
+    def start_stall_watchdog(self, stall_seconds: int = 300) -> None:
+        """Dump thread and task stacks once if the trading loop heartbeat stops updating"""
+        import faulthandler, os, threading, time as _time
+        loop = asyncio.get_running_loop()
+
+        def _watch():
+            dumped = False
+            while True:
+                _time.sleep(60)
+                try:
+                    age = _time.time() - os.path.getmtime('logs/bot_heartbeat.txt')
+                except OSError:
+                    continue
+                if age <= stall_seconds:
+                    dumped = False
+                    continue
+                if dumped:
+                    continue
+                dumped = True
+                logger.error(f"[WATCHDOG] Trading loop heartbeat stale for {age:.0f}s - dumping stacks")
+                try:
+                    faulthandler.dump_traceback(file=sys.stderr, all_threads=True)
+                    for task in list(asyncio.all_tasks(loop)):
+                        task.print_stack(limit=8, file=sys.stderr)
+                except Exception as e:
+                    logger.error(f"[WATCHDOG] Stack dump failed: {e}")
+                sys.stderr.flush()
+
+        threading.Thread(target=_watch, name="stall-watchdog", daemon=True).start()
+
     async def start(self) -> None:
         """Start the trading system"""
         try:
             if not await self.initialize():
                 logger.error("Failed to initialize system")
                 return
-            
+
             self.is_running = True
+            self.start_stall_watchdog()
 
             # Start DRE scheduler (background)
             self.start_dre_scheduler()
