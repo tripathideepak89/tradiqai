@@ -3,6 +3,7 @@ import logging
 import uuid
 import asyncio
 import hashlib
+import os
 import time
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
@@ -16,6 +17,9 @@ from brokers.base import (
 from utils.timezone import IST, now_ist
 
 logger = logging.getLogger(__name__)
+
+# Shared by the bot and dashboard processes so they reuse one daily token
+TOKEN_CACHE_PATH = os.getenv("GROWW_TOKEN_CACHE", "/tmp/groww_token.json")
 
 
 class GrowwBroker(BaseBroker):
@@ -57,8 +61,53 @@ class GrowwBroker(BaseBroker):
         reset = now.replace(hour=6, minute=0, second=0, microsecond=0)
         return reset if now < reset else reset + timedelta(days=1)
 
-    async def _refresh_access_token(self) -> None:
-        """Exchange api_key + api_secret for a daily access token"""
+    @staticmethod
+    def _read_token_cache() -> Dict[str, Any]:
+        """Token state shared by the bot and dashboard processes (same container)"""
+        try:
+            with open(TOKEN_CACHE_PATH) as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            return {}
+
+    @staticmethod
+    def _write_token_cache(state: Dict[str, Any]) -> None:
+        try:
+            tmp_path = f"{TOKEN_CACHE_PATH}.{os.getpid()}"
+            fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w") as f:
+                json.dump(state, f)
+            os.replace(tmp_path, TOKEN_CACHE_PATH)
+        except OSError as e:
+            logger.warning(f"Could not write Groww token cache: {e}")
+
+    def _adopt_cached_token(self, rejected_token: Optional[str]) -> bool:
+        """Use a valid token another process already fetched, instead of calling the token API"""
+        state = self._read_token_cache()
+        token = state.get("token")
+        try:
+            expiry = datetime.fromisoformat(state["expiry"])
+        except (KeyError, TypeError, ValueError):
+            return False
+        if not token or token == rejected_token or expiry <= now_ist() + timedelta(minutes=1):
+            return False
+        self.access_token = token
+        self.token_expiry = expiry
+        self.token_fetched_at = datetime.fromisoformat(state.get("fetched_at", now_ist().isoformat()))
+        logger.info(f"Groww access token reused from cache, valid until {expiry:%Y-%m-%d %H:%M} IST")
+        return True
+
+    async def _refresh_access_token(self, rejected_token: Optional[str] = None) -> None:
+        """Get a daily access token: reuse the shared one if valid, else exchange api_key + api_secret"""
+        if self._adopt_cached_token(rejected_token):
+            return
+
+        # Back off after a failed exchange; the token API is tightly rate limited
+        state = self._read_token_cache()
+        retry_after = state.get("retry_after")
+        if retry_after and now_ist() < datetime.fromisoformat(retry_after):
+            raise Exception(f"Groww token exchange backing off until {retry_after[11:19]} IST")
+
         if not self.session:
             self.session = aiohttp.ClientSession()
 
@@ -78,6 +127,9 @@ class GrowwBroker(BaseBroker):
         ) as response:
             response_text = await response.text()
             if response.status >= 400:
+                backoff = timedelta(minutes=15 if response.status == 429 else 2)
+                state["retry_after"] = (now_ist() + backoff).isoformat()
+                self._write_token_cache(state)
                 raise Exception(f"Groww token exchange failed [{response.status}]: {response_text[:300]}")
             response_data = json.loads(response_text)
 
@@ -85,15 +137,24 @@ class GrowwBroker(BaseBroker):
         if not token:
             raise Exception("Groww token exchange returned no token")
 
-        # Expiry comes back as naive IST, e.g. "2026-10-30T06:00:00"
+        # Expiry comes back as naive IST, e.g. "2026-10-30T06:00:00".
+        # A past or near expiry would refresh on every request, so fall back to the next reset.
         try:
             expiry = datetime.fromisoformat(response_data["expiry"]).replace(tzinfo=IST)
         except (KeyError, TypeError, ValueError):
+            expiry = None
+        if expiry is None or expiry <= now_ist() + timedelta(minutes=5):
+            logger.warning(f"Groww token expiry {response_data.get('expiry')!r} unusable, using next 6:00 IST")
             expiry = self._next_reset_ist()
 
         self.access_token = token
         self.token_expiry = expiry
         self.token_fetched_at = now_ist()
+        self._write_token_cache({
+            "token": token,
+            "expiry": expiry.isoformat(),
+            "fetched_at": self.token_fetched_at.isoformat(),
+        })
         logger.info(f"Groww access token refreshed, valid until {expiry:%Y-%m-%d %H:%M} IST")
 
     async def _make_request(
@@ -162,7 +223,7 @@ class GrowwBroker(BaseBroker):
 
             if auth_rejected:
                 logger.warning(f"Groww rejected access token on {endpoint}, refreshing and retrying once")
-                await self._refresh_access_token()
+                await self._refresh_access_token(rejected_token=self.access_token)
                 return await self._make_request(method, endpoint, data, params, retry_auth=False)
 
         except Exception as e:
