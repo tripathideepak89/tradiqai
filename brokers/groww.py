@@ -9,11 +9,13 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 import aiohttp
 import json
+import pyotp
 
 from brokers.base import (
     BaseBroker, Order, Position, Quote, OrderType,
     OrderStatus, TransactionType
 )
+from config import settings
 from utils.timezone import IST, now_ist
 
 logger = logging.getLogger(__name__)
@@ -34,6 +36,9 @@ class GrowwBroker(BaseBroker):
         self.api_key = config.get("api_key")
         self.api_secret = config.get("api_secret")
         self.api_url = config.get("api_url", "https://api.groww.in/v1")
+        # TOTP login is used when both are set (falls back to settings so every caller picks it up)
+        self.totp_token = config.get("totp_token") or settings.groww_api_key_totp
+        self.totp_secret = config.get("totp_secret") or settings.groww_api_secret_totp
         self.session: Optional[aiohttp.ClientSession] = None
 
         # Daily access token, obtained by exchanging api_key + api_secret.
@@ -42,8 +47,11 @@ class GrowwBroker(BaseBroker):
         self.token_expiry: Optional[datetime] = None
         self.token_fetched_at: Optional[datetime] = None
 
-        if not self.api_key or not self.api_secret:
+        if not self._has_credentials():
             logger.error("Groww API credentials not provided")
+
+    def _has_credentials(self) -> bool:
+        return bool((self.totp_token and self.totp_secret) or (self.api_key and self.api_secret))
 
     def _get_headers(self) -> Dict[str, str]:
         """Get API request headers"""
@@ -111,10 +119,18 @@ class GrowwBroker(BaseBroker):
         if not self.session:
             self.session = aiohttp.ClientSession()
 
-        timestamp = str(int(time.time()))
-        checksum = hashlib.sha256((self.api_secret + timestamp).encode()).hexdigest()
+        if self.totp_token and self.totp_secret:
+            # TOTP key: no daily approval needed
+            bearer = self.totp_token
+            body = {"key_type": "totp", "totp": pyotp.TOTP(self.totp_secret).now()}
+        else:
+            # Approval key: api_secret + timestamp checksum
+            timestamp = str(int(time.time()))
+            checksum = hashlib.sha256((self.api_secret + timestamp).encode()).hexdigest()
+            bearer = self.api_key
+            body = {"key_type": "approval", "checksum": checksum, "timestamp": timestamp}
         headers = {
-            "Authorization": f"Bearer {self.api_key}",
+            "Authorization": f"Bearer {bearer}",
             "X-API-VERSION": "1.0",
             "Content-Type": "application/json",
             "Accept": "application/json"
@@ -123,11 +139,12 @@ class GrowwBroker(BaseBroker):
         async with self.session.post(
             f"{self.api_url}/token/api/access",
             headers=headers,
-            json={"key_type": "approval", "checksum": checksum, "timestamp": timestamp}
+            json=body
         ) as response:
             response_text = await response.text()
             if response.status >= 400:
-                backoff = timedelta(minutes=15 if response.status == 429 else 2)
+                # Token API allows 30 calls/minute, so a short backoff is enough
+                backoff = timedelta(minutes=1)
                 state["retry_after"] = (now_ist() + backoff).isoformat()
                 self._write_token_cache(state)
                 raise Exception(f"Groww token exchange failed [{response.status}]: {response_text[:300]}")
@@ -144,7 +161,8 @@ class GrowwBroker(BaseBroker):
         except (KeyError, TypeError, ValueError):
             expiry = None
         if expiry is None or expiry <= now_ist() + timedelta(minutes=5):
-            logger.warning(f"Groww token expiry {response_data.get('expiry')!r} unusable, using next 6:00 IST")
+            if response_data.get("expiry"):
+                logger.warning(f"Groww token expiry {response_data.get('expiry')!r} unusable, using next 6:00 IST")
             expiry = self._next_reset_ist()
 
         self.access_token = token
@@ -236,7 +254,7 @@ class GrowwBroker(BaseBroker):
             logger.info("Connecting to Groww API...")
             
             # Validate credentials
-            if not self.api_key or not self.api_secret:
+            if not self._has_credentials():
                 logger.error("Groww API credentials missing")
                 return False
             

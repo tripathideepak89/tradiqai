@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     # Groww
     groww_api_key: Optional[str] = None
     groww_api_secret: Optional[str] = None
+    # TOTP login (preferred): TOTP token + TOTP secret, no daily approval
+    groww_api_key_totp: Optional[str] = None
+    groww_api_secret_totp: Optional[str] = None
     groww_api_url: str = "https://api.groww.in/v1"
     
     # Database
